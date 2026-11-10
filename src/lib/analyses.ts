@@ -162,7 +162,7 @@ export function suggestedOption(a: Analysis): string | null {
     .filter((x) => x.r);
   if (!scored.length) return null;
   scored.sort((x, y) => rank[x.r!] - rank[y.r!] || x.n - y.n);
-  return scored[0].o;
+  return scored[0]!.o;
 }
 
 export type Status = "en_cours" | "eval_incomplete" | "terminee" | "revue_a_faire" | "revue" | "abandonnee";

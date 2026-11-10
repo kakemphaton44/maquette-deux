@@ -78,7 +78,7 @@ function Home() {
               <p className="mt-4 text-primary-foreground/80">Trente jours après chaque décision, Contre-feu vous propose une revue : a-t-elle tenu ? Vos résultats s’afficheront ici.</p>
             )}
             {dueReview.length > 0 && (
-              <Link to="/revue/$id" params={{ id: dueReview[0].id }} className="mt-4 inline-flex rounded-full bg-highlight px-4 py-2 text-sm font-bold text-primary no-underline">
+              <Link to="/revue/$id" params={{ id: dueReview[0]!.id }} className="mt-4 inline-flex rounded-full bg-highlight px-4 py-2 text-sm font-bold text-primary no-underline">
                 {dueReview.length} revue{dueReview.length > 1 ? "s" : ""} à faire →
               </Link>
             )}

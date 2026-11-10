@@ -52,7 +52,7 @@ function Workspace({ a }: { a: Analysis }) {
   useEffect(() => { setErrors([]); window.scrollTo(0, 0); }, [view]);
 
   const next = () => {
-    const errs = STEP_CHECKS[view](a);
+    const errs = STEP_CHECKS[view]!(a);
     if (errs.length) { setErrors(errs); return; }
     if (view === 4) {
       const now = new Date();
@@ -178,8 +178,8 @@ function Describe({ a, up }: StepProps) {
   );
 }
 
-function ConfidenceChips({ value, onChange }: { value?: Confidence; onChange: (c: Confidence) => void }) {
-  return <div className="flex flex-wrap gap-2">{(["faible", "moyenne", "forte"] as const).map((c) => <Chip key={c} on={value === c} onClick={() => onChange(c)}>{c[0].toUpperCase() + c.slice(1)}</Chip>)}</div>;
+function ConfidenceChips({ value, onChange }: { value: Confidence | undefined; onChange: (c: Confidence) => void }) {
+  return <div className="flex flex-wrap gap-2">{(["faible", "moyenne", "forte"] as const).map((c) => <Chip key={c} on={value === c} onClick={() => onChange(c)}>{c.charAt(0).toUpperCase() + c.slice(1)}</Chip>)}</div>;
 }
 
 function Understand({ a, up }: StepProps) {
@@ -207,7 +207,7 @@ function Understand({ a, up }: StepProps) {
 }
 
 function Test({ a, up }: StepProps) {
-  const [opt, setOpt] = useState(OPTIONS[a.kind][0]);
+  const [opt, setOpt] = useState<string>(OPTIONS[a.kind][0]!);
   const setObjs = (objections: Objection[]) => up({ objections });
   return (
     <>
