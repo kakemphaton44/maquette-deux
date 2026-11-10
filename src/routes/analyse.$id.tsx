@@ -172,7 +172,7 @@ function Describe({ a, up }: StepProps) {
           {[...OPTIONS[a.kind], "Je ne sais pas encore"].map((o) => <Chip key={o} dashed={o === "Je ne sais pas encore"} on={a.startPosition === o} onClick={() => up({ startPosition: o })}>{o}</Chip>)}
         </div>
         <Field label="Pourquoi, en une phrase" required><input className={inputCls} value={a.startReason} onChange={(e) => up({ startReason: e.target.value })} placeholder="Ex. Signal trop faible, aucun impact client démontré." /></Field>
-        <Field label="Les risques qui vous inquiètent"><ListEditor items={a.risks} onChange={(risks) => up({ risks })} placeholder="Ex. Réaction des clients grands comptes" addLabel="Ajouter un risque" /></Field>
+        <Field group label="Les risques qui vous inquiètent"><ListEditor items={a.risks} onChange={(risks) => up({ risks })} placeholder="Ex. Réaction des clients grands comptes" addLabel="Ajouter un risque" /></Field>
       </Card>
     </>
   );
@@ -195,10 +195,10 @@ function Understand({ a, up }: StepProps) {
         ))}
       </div>
       <Card className="space-y-5">
-        <Field label="Confiance dans cette lecture" required><ConfidenceChips value={a.readingConfidence} onChange={(readingConfidence) => up({ readingConfidence })} /></Field>
+        <Field group label="Confiance dans cette lecture" required><ConfidenceChips value={a.readingConfidence} onChange={(readingConfidence) => up({ readingConfidence })} /></Field>
         <Field label="L’enjeu" required hint="Qu’est-ce qui est menacé ou possible, si le signal se confirme ?"><textarea rows={3} className={inputCls} value={a.stake} onChange={(e) => up({ stake: e.target.value })} /></Field>
-        <Field label="Qui est touché" hint="Segments de clients, équipes, revenus…"><ListEditor items={a.threatened} onChange={(threatened) => up({ threatened })} placeholder="Ex. PME du bâtiment, offre Pro" /></Field>
-        <Field label="Gravité" required>
+        <Field group label="Qui est touché" hint="Segments de clients, équipes, revenus…"><ListEditor items={a.threatened} onChange={(threatened) => up({ threatened })} placeholder="Ex. PME du bâtiment, offre Pro" /></Field>
+        <Field group label="Gravité" required>
           <div className="flex flex-wrap gap-2">{([1, 2, 3] as const).map((s) => <Chip key={s} on={a.severity === s} onClick={() => up({ severity: s })}>{["Faible", "Modérée", "Forte"][s - 1]}</Chip>)}</div>
         </Field>
       </Card>
@@ -274,10 +274,10 @@ function Evaluate({ a, up }: StepProps) {
       })}
       <Card className="space-y-5">
         <h2 className="text-2xl text-primary">Deux questions avant de décider</h2>
-        <Field label="L’épreuve a-t-elle changé votre avis ?" required>
+        <Field group label="L’épreuve a-t-elle changé votre avis ?" required>
           <div className="flex flex-wrap gap-2">{([["oui", "Oui"], ["en_partie", "En partie"], ["non", "Non"]] as [Changed, string][]).map(([k, l]) => <Chip key={k} on={a.changedMind === k} onClick={() => up({ changedMind: k })}>{l}</Chip>)}</div>
         </Field>
-        <Field label="Quelle confiance dans la décision que vous allez prendre ?" required><ConfidenceChips value={a.decisionConfidence} onChange={(decisionConfidence) => up({ decisionConfidence })} /></Field>
+        <Field group label="Quelle confiance dans la décision que vous allez prendre ?" required><ConfidenceChips value={a.decisionConfidence} onChange={(decisionConfidence) => up({ decisionConfidence })} /></Field>
       </Card>
     </>
   );
@@ -301,11 +301,11 @@ function Decide({ a, up }: StepProps) {
         </Card>
       </div>
       <Card className="space-y-5">
-        <Field label="Votre décision" required>
+        <Field group label="Votre décision" required>
           <div className="flex flex-wrap gap-2">{OPTIONS[a.kind].map((o) => <Chip key={o} on={a.decision === o} onClick={() => up({ decision: o })}>{o}</Chip>)}</div>
         </Field>
         <Field label="Pourquoi" required hint="Cette justification apparaîtra dans la synthèse."><textarea rows={3} className={inputCls} value={a.decisionReason} onChange={(e) => up({ decisionReason: e.target.value })} /></Field>
-        <Field label="Prochaines actions"><ListEditor items={a.nextSteps} onChange={(nextSteps) => up({ nextSteps })} placeholder="Ex. Appeler trois clients grands comptes d’ici vendredi" addLabel="Ajouter une action" /></Field>
+        <Field group label="Prochaines actions"><ListEditor items={a.nextSteps} onChange={(nextSteps) => up({ nextSteps })} placeholder="Ex. Appeler trois clients grands comptes d’ici vendredi" addLabel="Ajouter une action" /></Field>
       </Card>
     </>
   );

@@ -43,7 +43,7 @@ function Review({ a }: { a: Analysis }) {
           <p className="mt-2 italic">« {a.decisionReason} »</p>
         </Card>
         <Card className="space-y-5">
-          <Field label="Avec le recul">
+          <Field group label="Avec le recul">
             <div className="flex flex-wrap gap-2">
               {([["tenu", "Elle a tenu telle quelle"], ["partiel", "Elle n’a tenu qu’en partie"], ["pas_tenu", "Elle n’a pas tenu"]] as [ReviewOutcome, string][]).map(([k, l]) => <Chip key={k} on={outcome === k} onClick={() => setOutcome(k)}>{l}</Chip>)}
             </div>

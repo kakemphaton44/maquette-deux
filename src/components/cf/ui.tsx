@@ -93,16 +93,17 @@ export function Required() {
 export const inputCls =
   "w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none";
 
-export function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: ReactNode }) {
+export function Field({ label, hint, required, group, children }: { label: string; hint?: string; required?: boolean; group?: boolean; children: ReactNode }) {
+  const Tag = group ? "div" : "label";
   return (
-    <label className="block space-y-2">
+    <Tag className="block space-y-2" {...(group ? { role: "group", "aria-label": label } : {})}>
       <span className="block font-bold">
         {label}
         {required && <Required />}
       </span>
       {hint && <span className="block text-sm text-muted-foreground">{hint}</span>}
       {children}
-    </label>
+    </Tag>
   );
 }
 
