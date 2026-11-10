@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as NouvelleRouteImport } from './routes/nouvelle'
 import { Route as AnalyseIdRouteImport } from './routes/analyse.$id'
+import { Route as RevueIdRouteImport } from './routes/revue.$id'
+import { Route as SyntheseIdRouteImport } from './routes/synthese.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +30,59 @@ const AnalyseIdRoute = AnalyseIdRouteImport.update({
   path: '/analyse/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RevueIdRoute = RevueIdRouteImport.update({
+  id: '/revue/$id',
+  path: '/revue/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SyntheseIdRoute = SyntheseIdRouteImport.update({
+  id: '/synthese/$id',
+  path: '/synthese/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/nouvelle': typeof NouvelleRoute
   '/analyse/$id': typeof AnalyseIdRoute
+  '/revue/$id': typeof RevueIdRoute
+  '/synthese/$id': typeof SyntheseIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/nouvelle': typeof NouvelleRoute
   '/analyse/$id': typeof AnalyseIdRoute
+  '/revue/$id': typeof RevueIdRoute
+  '/synthese/$id': typeof SyntheseIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/nouvelle': typeof NouvelleRoute
   '/analyse/$id': typeof AnalyseIdRoute
+  '/revue/$id': typeof RevueIdRoute
+  '/synthese/$id': typeof SyntheseIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/nouvelle' | '/analyse/$id'
+  fullPaths: '/' | '/nouvelle' | '/analyse/$id' | '/revue/$id' | '/synthese/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/nouvelle' | '/analyse/$id'
-  id: '__root__' | '/' | '/nouvelle' | '/analyse/$id'
+  to: '/' | '/nouvelle' | '/analyse/$id' | '/revue/$id' | '/synthese/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/nouvelle'
+    | '/analyse/$id'
+    | '/revue/$id'
+    | '/synthese/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NouvelleRoute: typeof NouvelleRoute
   AnalyseIdRoute: typeof AnalyseIdRoute
+  RevueIdRoute: typeof RevueIdRoute
+  SyntheseIdRoute: typeof SyntheseIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +108,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnalyseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/revue/$id': {
+      id: '/revue/$id'
+      path: '/revue/$id'
+      fullPath: '/revue/$id'
+      preLoaderRoute: typeof RevueIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/synthese/$id': {
+      id: '/synthese/$id'
+      path: '/synthese/$id'
+      fullPath: '/synthese/$id'
+      preLoaderRoute: typeof SyntheseIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +129,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NouvelleRoute: NouvelleRoute,
   AnalyseIdRoute: AnalyseIdRoute,
+  RevueIdRoute: RevueIdRoute,
+  SyntheseIdRoute: SyntheseIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

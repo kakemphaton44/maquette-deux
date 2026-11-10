@@ -12,8 +12,8 @@ export interface Objection {
   option: string;
   voice: Voice;
   text: string;
-  verdict?: Verdict;
-  answer?: string;
+  verdict?: Verdict | undefined;
+  answer?: string | undefined;
 }
 
 export interface Analysis {
@@ -29,24 +29,24 @@ export interface Analysis {
   known: string[];
   assumed: string[];
   unknown: string[];
-  readingConfidence?: Confidence;
+  readingConfidence?: Confidence | undefined;
   stake: string;
   threatened: string[];
-  severity?: 1 | 2 | 3;
+  severity?: 1 | 2 | 3 | undefined;
   objections: Objection[];
-  decision?: string;
+  decision?: string | undefined;
   decisionReason: string;
-  changedMind?: Changed;
-  decisionConfidence?: Confidence;
+  changedMind?: Changed | undefined;
+  decisionConfidence?: Confidence | undefined;
   nextSteps: string[];
   abandoned: boolean;
-  review?: { outcome: ReviewOutcome; note: string; date: string };
-  reviewDue?: string;
+  review?: { outcome: ReviewOutcome; note: string; date: string } | undefined;
+  reviewDue?: string | undefined;
   step: number;
-  elapsed?: number;
+  elapsed?: number | undefined;
   createdAt: string;
   updatedAt: string;
-  completedAt?: string;
+  completedAt?: string | undefined;
 }
 
 export const OPTIONS: Record<Kind, string[]> = {
