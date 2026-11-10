@@ -29,4 +29,5 @@ use the editor.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
 
-- Screens from the uploaded "maquette v2" live as HTML templates in src/mockup/templates, rendered by the ported mini engine (src/mockup/engine.js + screens.js) via MockupScreen; each screen is a URL under /$screen. Why: keeps the 23 screens pixel-faithful to the mockup.
+
+- Contre-feu is frontend-only (user declined backend and AI): business rules live as pure functions in src/lib/analyses.ts (tested), persistence via the localStorage store in src/lib/store.ts. Why: keeps rules testable and storage swappable.
