@@ -43,6 +43,7 @@ export interface Analysis {
   review?: { outcome: ReviewOutcome; note: string; date: string };
   reviewDue?: string;
   step: number;
+  elapsed?: number;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
