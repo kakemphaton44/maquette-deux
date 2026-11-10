@@ -1,23 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { MockupScreen } from "@/mockup/MockupScreen";
 
-// The home route ships no og:image, so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Contre-feu — Mes analyses" },
+      { name: "description", content: "Contre-feu fait attaquer vos options par ceux qu’elles touchent, avant que vous ne tranchiez." },
+      { property: "og:title", content: "Contre-feu — Mes analyses" },
+      { property: "og:description", content: "Une décision argumentée en 30 minutes, face à un signal concurrent." },
+    ],
+  }),
+  component: () => <MockupScreen screen="M2_Accueil" />,
 });
-
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
