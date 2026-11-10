@@ -29,3 +29,5 @@ use the editor.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
 
+
+- Contre-feu is frontend-only (user declined backend and AI): business rules live as pure functions in src/lib/analyses.ts (tested), persistence via the localStorage store in src/lib/store.ts. Why: keeps rules testable and storage swappable.

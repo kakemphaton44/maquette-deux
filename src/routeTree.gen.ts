@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as NouvelleRouteImport } from './routes/nouvelle'
+import { Route as AnalyseIdRouteImport } from './routes/analyse.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NouvelleRoute = NouvelleRouteImport.update({
+  id: '/nouvelle',
+  path: '/nouvelle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyseIdRoute = AnalyseIdRouteImport.update({
+  id: '/analyse/$id',
+  path: '/analyse/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/nouvelle': typeof NouvelleRoute
+  '/analyse/$id': typeof AnalyseIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/nouvelle': typeof NouvelleRoute
+  '/analyse/$id': typeof AnalyseIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/nouvelle': typeof NouvelleRoute
+  '/analyse/$id': typeof AnalyseIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/nouvelle' | '/analyse/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/nouvelle' | '/analyse/$id'
+  id: '__root__' | '/' | '/nouvelle' | '/analyse/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  NouvelleRoute: typeof NouvelleRoute
+  AnalyseIdRoute: typeof AnalyseIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nouvelle': {
+      id: '/nouvelle'
+      path: '/nouvelle'
+      fullPath: '/nouvelle'
+      preLoaderRoute: typeof NouvelleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analyse/$id': {
+      id: '/analyse/$id'
+      path: '/analyse/$id'
+      fullPath: '/analyse/$id'
+      preLoaderRoute: typeof AnalyseIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  NouvelleRoute: NouvelleRoute,
+  AnalyseIdRoute: AnalyseIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -6,6 +6,7 @@ import {
   KIND_LABEL, OPTIONS, ROBUSTNESS_LABEL, STEPS, STEP_CHECKS, VOICES, optionRobustness, realObjections, reviewDueDate, suggestedOption,
   type Analysis, type Changed, type Confidence, type Objection, type Verdict,
 } from "@/lib/analyses";
+import { Missing } from "@/components/cf/Missing";
 import { saveAnalysis, useAnalyses } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -28,19 +29,6 @@ function AnalysisPage() {
   if (!list) return <div className="min-h-screen"><AppHeader /></div>;
   if (!a) return <Missing />;
   return <Workspace key={a.id} a={a} />;
-}
-
-export function Missing() {
-  return (
-    <div className="min-h-screen">
-      <AppHeader />
-      <main className="mx-auto max-w-xl px-6 py-20 text-center">
-        <h1 className="text-4xl text-primary">Analyse introuvable</h1>
-        <p className="mt-3 text-muted-foreground">Elle a peut-être été supprimée, ou créée dans un autre navigateur.</p>
-        <Link to="/" className="mt-6 inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-bold text-primary-foreground no-underline">Mes analyses</Link>
-      </main>
-    </div>
-  );
 }
 
 const fmtTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
