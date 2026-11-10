@@ -17,7 +17,7 @@ export function MockupScreen({ screen }: { screen: ScreenKey }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadRuntime(), templates[`./templates/${screen}.html`]()]).then(([, html]) => {
+    Promise.all([loadRuntime(), templates[`./templates/${screen}.html`]!()]).then(([, html]) => {
       if (cancelled || !rootRef.current) return;
       const tpl = document.createElement("template");
       tpl.innerHTML = html;
