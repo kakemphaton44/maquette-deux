@@ -183,9 +183,9 @@ function Workspace({ a }: { a: Analysis }) {
               prev={view > 0 ? () => setView(view - 1) : undefined}
               prevLabel={view > 0 ? STEPS[view - 1]!.label : ""}
               primary={
-                view === 0 ? { label: a.launched ? "Continuer →" : "Lancer l’analyse →", run: () => { if (a.launched) return goStep(1); setTried(true); if (!describeErrors(a).length) ai.lecture(a); } }
-                : view === 1 ? { label: a.objections.length ? "Continuer →" : "Mettre les options à l’épreuve →", disabled: a.staleEnjeu, run: async () => { if (!a.objections.length) await ai.objections(a); goStep(2); } }
-                : view === 2 ? { label: "Décider →", disabled: a.staleObjections || !a.objections.length, run: () => goStep(3) }
+                view === 0 ? { label: a.launched ? "Continuer" : "Lancer l’analyse", run: () => { if (a.launched) return goStep(1); setTried(true); if (!describeErrors(a).length) ai.lecture(a); } }
+                : view === 1 ? { label: a.objections.length ? "Continuer" : "Mettre les options à l’épreuve", disabled: a.staleEnjeu, run: async () => { if (!a.objections.length) await ai.objections(a); goStep(2); } }
+                : view === 2 ? { label: "Décider", disabled: a.staleObjections || !a.objections.length, run: () => goStep(3) }
                 : { label: "Clore l’analyse", run: () => {
                     setTried(true);
                     if (decideErrors(a, t?.label ?? null).length || closeErrors(a).length) return;
