@@ -31,7 +31,7 @@ function NewAnalysis() {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-4xl space-y-8 px-6 py-12">
+      <main className="w-full space-y-8 px-6 lg:px-10 py-12">
         <div>
           <h1 className="text-5xl text-primary">Quelle <em className="text-accent">situation</em> ?</h1>
           <p className="mt-3 text-lg text-muted-foreground">Vous choisissez : Contre-feu ne devine pas le type de situation.</p>

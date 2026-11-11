@@ -22,7 +22,7 @@ export function AppHeader() {
   const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <header className="no-print sticky top-0 z-20 bg-primary text-primary-foreground">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-8 px-6">
+      <div className="flex h-16 w-full items-center gap-8 px-6 lg:px-10">
         <Logo />
         <nav className="flex gap-6 text-[15px]">
           <Link to="/" className="text-primary-foreground/80 no-underline hover:text-primary-foreground" activeProps={{ className: "!text-primary-foreground font-semibold" }} activeOptions={{ exact: true }}>

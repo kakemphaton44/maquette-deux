@@ -112,7 +112,7 @@ function Workspace({ a }: { a: Analysis }) {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto grid max-w-7xl gap-8 px-6 py-8 lg:grid-cols-[260px_1fr]">
+      <main className="grid w-full gap-8 px-6 lg:px-10 py-8 lg:grid-cols-[260px_1fr]">
         <aside className="no-print space-y-5 lg:sticky lg:top-24 lg:self-start">
           <Link to="/" className="text-sm font-bold text-accent no-underline">← Mes analyses</Link>
           <div>

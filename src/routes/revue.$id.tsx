@@ -32,7 +32,7 @@ function Revue() {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <main className="w-full space-y-6 px-6 lg:px-10 py-10">
         <Link to="/" className="text-sm font-bold text-accent no-underline">← Mes analyses</Link>
         <div><p className="text-xs font-bold uppercase tracking-wider text-accent">Revue de décision</p><h1 className="mt-2 text-5xl text-primary">{titleOf(a)}</h1>
           <p className="mt-2 text-muted-foreground">Deux questions, quelques semaines après la décision. Elles disent si l’analyse vous avait bien préparé, et alimentent le bilan de vos revues.</p></div>
