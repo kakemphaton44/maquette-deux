@@ -1,36 +1,69 @@
 import { describe, expect, it } from "vitest";
-import { newAnalysis, optionRobustness, status, suggestedOption, testErrors, reviewDueDate, describeErrors } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, type Analysis, type Criterion, type Objection } from "./analyses";
 
-const base = () => newAnalysis("concurrent", "a1", new Date("2026-01-01T00:00:00Z"));
-const obj = (option: string, verdict?: "ecartee" | "a_traiter" | "bloquante") => ({ id: option + Math.random(), option, voice: "clients" as const, text: "x", verdict });
+const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
+const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
+const base = (): Analysis => newAnalysis("concurrent", "x", new Date("2026-01-01"));
 
-describe("règles Contre-feu", () => {
-  it("une objection bloquante rend l'option à revoir", () => {
-    const a = { ...base(), objections: [obj("Ajuster", "ecartee"), obj("Ajuster", "bloquante")] };
-    expect(optionRobustness(a, "Ajuster")).toBe("a_revoir");
+describe("tendance concurrent", () => {
+  it("Riposter quand proximité 3, clients 3, avancement ≥ 2", () => {
+    expect(trend("concurrent", crit({ recouvrement: 3, exposition: 3, maturite: 2, capacite: 2, urgence: 1 }), [], false)!.label).toBe("Riposter");
   });
-  it("une objection à traiter donne une option avec ajustements", () => {
-    const a = { ...base(), objections: [obj("Ajuster", "a_traiter")] };
-    expect(optionRobustness(a, "Ajuster")).toBe("ajustements");
+  it("moyens faibles abaissent d'un cran", () => {
+    expect(trend("concurrent", crit({ recouvrement: 3, exposition: 3, maturite: 2, capacite: 1, urgence: 1 }), [], false)!.label).toBe("Ajuster");
   });
-  it("suggère l'option la plus solide", () => {
-    const a = { ...base(), objections: [obj("Surveiller", "bloquante"), obj("Ajuster", "ecartee"), obj("Riposter", "a_traiter")] };
-    expect(suggestedOption(a)).toBe("Ajuster");
+  it("Surveiller sinon", () => {
+    expect(trend("concurrent", crit({ recouvrement: 1, exposition: 3, maturite: 3, capacite: 3, urgence: 3 }), [], false)!.label).toBe("Surveiller");
   });
-  it("exige une objection par option avant l'évaluation", () => {
-    const a = { ...base(), objections: [obj("Surveiller")] };
-    expect(testErrors(a)).toHaveLength(2);
+});
+
+describe("tendance détournement", () => {
+  it("apporte fort, coûte faible → Adopter", () => {
+    expect(trend("detournement", crit({ valeur: 5, ampleur: 4, effort: 1, risque: 2, urgence: 1 }), [], false)!.label).toBe("Adopter");
   });
-  it("la revue est due 30 jours après la décision", () => {
-    expect(reviewDueDate(new Date("2026-01-01T00:00:00Z")).slice(0, 10)).toBe("2026-01-31");
+  it("apporte fort, coûte fort → Tolérer pour l'instant", () => {
+    expect(trend("detournement", crit({ valeur: 5, ampleur: 4, effort: 4, risque: 4, urgence: 1 }), [], false)!.label).toBe(TRP);
   });
-  it("une analyse terminée passe en revue à faire à l'échéance", () => {
-    const a = { ...base(), completedAt: "2026-01-01T00:00:00Z", reviewDue: "2026-01-31T00:00:00Z" };
-    expect(status(a, new Date("2026-01-15"))).toBe("terminee");
-    expect(status(a, new Date("2026-02-01"))).toBe("revue_a_faire");
+  it("catégorie partagée → Partagée", () => {
+    expect(trend("detournement", crit({ valeur: 3, ampleur: 3, effort: 1, risque: 1, urgence: 1 }), [], false)!.label).toBe(PART);
   });
-  it("refuse une description non anonymisée", () => {
-    const a = { ...base(), title: "T", signal: "un signal suffisamment long", startPosition: "Ajuster", startReason: "r" };
-    expect(describeErrors(a)).toEqual(["Confirmez que la description est anonymisée."]);
+  it("risque bloquant → Corriger", () => {
+    expect(trend("detournement", crit({ valeur: 5, ampleur: 5, effort: 1, risque: 1, urgence: 1 }), [], true)!.label).toBe("Corriger");
+  });
+});
+
+describe("solidité de l'attaque", () => {
+  it("2 étayées solide, 1 partielle, 0 fragile", () => {
+    const a = { ...base(), objections: [obj({ support: "etayee" }), obj({ support: "etayee" }), obj({ option: "Riposter", support: "etayee" })] };
+    expect(solidity(a, "Ajuster")).toBe("solide");
+    expect(solidity(a, "Riposter")).toBe("partielle");
+    expect(solidity(a, "Surveiller")).toBe("fragile");
+  });
+});
+
+describe("issue", () => {
+  it("échec sans objection utile et nouvelle", () => {
+    const a = { ...base(), position: "Ajuster", decision: "Ajuster", objections: [obj({ useful: "oui", novel: "non" })] } as Analysis;
+    expect(outcome(a)!.label).toBe("Échec");
+  });
+  it("succès fort si décision changée avec apport", () => {
+    const a = { ...base(), position: "Surveiller", decision: "Ajuster", objections: [obj({ useful: "oui", novel: "oui" })] } as Analysis;
+    expect(outcome(a)!.label).toBe("Succès fort");
+  });
+  it("décision construite sans position", () => {
+    const a = { ...base(), position: NSP, decision: "Ajuster", objections: [obj({ useful: "oui", novel: "oui" })] } as Analysis;
+    expect(outcome(a)!.label).toBe("Succès · décision construite");
+  });
+  it("non calculée tant qu'une objection reste à évaluer", () => {
+    const a = { ...base(), position: "Ajuster", decision: "Ajuster", objections: [obj({ useful: "oui" })] } as Analysis;
+    expect(outcome(a)).toBeNull();
+  });
+});
+
+describe("décider", () => {
+  it("justification obligatoire si écart avec l'IA, et revue + mesure", () => {
+    const a = { ...base(), decision: "Riposter" } as Analysis;
+    expect(decideErrors(a, "Ajuster")).toHaveLength(3);
+    expect(decideErrors({ ...a, decisionWhy: "x", trigger: "y", measure: "z" }, "Ajuster")).toHaveLength(0);
   });
 });

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { Analysis } from "./analyses";
 
 // Analyses conservées dans ce navigateur uniquement.
-const KEY = "contre-feu:analyses";
+const KEY = "contre-feu:analyses-v3";
 const NAME_KEY = "contre-feu:nom";
 const listeners = new Set<() => void>();
 let cache: Analysis[] | null = null;

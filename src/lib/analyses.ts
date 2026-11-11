@@ -1,204 +1,299 @@
-// Modèle d'une analyse Contre-feu et règles métier (pures, testables).
+// Modèle d'une analyse Contre-feu (maquette fusionnée) et règles métier pures, testables.
 
 export type Kind = "concurrent" | "detournement";
-export type Voice = "concurrent" | "clients" | "marche" | "utilisateurs" | "equipe";
-export type Verdict = "ecartee" | "a_traiter" | "bloquante";
-export type Confidence = "faible" | "moyenne" | "forte";
-export type Changed = "oui" | "en_partie" | "non";
-export type ReviewOutcome = "tenu" | "partiel" | "pas_tenu";
+export type ReadStatus = "sait" | "suppose" | "ignore";
+export type Support = "etayee" | "reformulee" | "non";
+export type YesNo = "oui" | "non";
+export type Motif = "erreur" | "contexte";
+export type ReviewHolds = "oui" | "en_partie" | "non";
+
+export interface ReadingItem {
+  id: string;
+  label: string;
+  status: ReadStatus;
+  text: string;
+  source: string;
+  quote?: string | undefined;
+  /** Proposition initiale de l'IA, conservée après une correction. */
+  orig?: { text: string; status: ReadStatus } | undefined;
+}
+
+export interface Criterion {
+  id: string;
+  name: string;
+  cat?: "apporte" | "coute" | "urgence" | undefined;
+  ai: number;
+  value: number;
+  why: string;
+  motif?: Motif | undefined;
+  note?: string | undefined;
+}
+
+export interface Premise { status: ReadStatus; text: string; src: string }
 
 export interface Objection {
   id: string;
   option: string;
-  voice: Voice;
+  role: string;
   text: string;
-  verdict?: Verdict | undefined;
-  answer?: string | undefined;
-  /** Proposée par l'IA ou saisie par l'utilisateur. */
-  origin?: "ia" | "user" | undefined;
-  support?: "etayee" | "reformulee" | "non" | undefined;
-  premise?: string | undefined;
+  support: Support;
+  initial?: string | undefined;
+  premises: Premise[];
+  useful?: YesNo | undefined;
+  novel?: YesNo | undefined;
 }
+
+export interface CorrectionLog { at: string; name: string; from: string; to: string; ai: string; motif: Motif; note?: string | undefined }
 
 export interface Analysis {
   id: string;
   kind: Kind;
   title: string;
   signal: string;
-  source: string;
-  anonymised: boolean;
-  startPosition: string;
-  startReason: string;
+  prevu: string;
+  observe: string;
+  contexte: string;
+  position: string;
+  positionWhy: string;
   risks: string[];
-  known: string[];
-  assumed: string[];
-  unknown: string[];
-  readingConfidence?: Confidence | undefined;
-  stake: string;
-  threatened: string[];
-  severity?: 1 | 2 | 3 | undefined;
-  objections: Objection[];
-  decision?: string | undefined;
-  decisionReason: string;
-  changedMind?: Changed | undefined;
-  decisionConfidence?: Confidence | undefined;
-  nextSteps: string[];
-  abandoned: boolean;
-  review?: { outcome: ReviewOutcome; note: string; date: string } | undefined;
-  reviewDue?: string | undefined;
+  anonymised: boolean;
+  launched: boolean;
   step: number;
-  elapsed?: number | undefined;
+  summary: string;
+  reading: ReadingItem[];
+  criteria: Criterion[];
+  blocking: boolean;
+  aiTrendInitial?: string | undefined;
+  staleEnjeu: boolean;
+  staleObjections: boolean;
+  objections: Objection[];
+  corrections: CorrectionLog[];
+  decision?: string | undefined;
+  decisionWhy: string;
+  keyObjection?: string | undefined;
+  reviewDate: string;
+  trigger: string;
+  measure: string;
+  pertinence?: number | undefined;
+  effort?: number | undefined;
+  techFail?: string | undefined;
+  abandoned: boolean;
+  completedAt?: string | undefined;
+  review?: { holds: ReviewHolds; verified?: YesNo | "na" | undefined; note: string; date: string } | undefined;
   createdAt: string;
   updatedAt: string;
-  completedAt?: string | undefined;
 }
 
-export const OPTIONS: Record<Kind, string[]> = {
-  concurrent: ["Surveiller", "Ajuster", "Riposter"],
-  detournement: ["Tolérer", "Corriger", "Adopter"],
+export const NSP = "Je ne sais pas encore";
+export const TRP = "Tolérer pour l’instant, revoir";
+export const PART = "Partagée";
+
+export const KIND: Record<Kind, { code: string; name: string; intro: string; options: string[]; decisions: string[]; roles: string[]; resultLabel: string; desc: Record<string, string> }> = {
+  concurrent: {
+    code: "UC-01", name: "Mouvement concurrent",
+    intro: "Un concurrent lance ou prépare une évolution susceptible de menacer votre produit.",
+    options: ["Surveiller", "Ajuster", "Riposter"], decisions: ["Surveiller", "Ajuster", "Riposter"],
+    roles: ["Concurrent", "Nos clients", "Marché"], resultLabel: "Zone de menace",
+    desc: { Surveiller: "Ne rien changer, suivre le signal. Une revue datée ou un signal déclencheur.", Ajuster: "Adapter le produit ou le discours, sans tout réorienter.", Riposter: "Répondre frontalement : fonctionnalité, prix ou offre." },
+  },
+  detournement: {
+    code: "UC-05", name: "Détournement d’usage",
+    intro: "Des utilisateurs détournent votre produit pour couvrir un besoin qu’il ne sert pas correctement.",
+    options: ["Tolérer", "Corriger", "Adopter"], decisions: ["Tolérer", TRP, "Corriger", "Adopter"],
+    roles: ["Qui détourne l’usage", "Qui utilise le résultat", "Qui porte le coût"], resultLabel: "Tendance d’usage",
+    desc: { Tolérer: "Laisser l’usage en l’état, sous surveillance. Une revue datée ou un signal déclencheur.", [TRP]: "Garder l’usage pour l’instant malgré son coût. Réexamen daté ou signal déclencheur, et un élément à mesurer.", Corriger: "Ramener l’usage dans le cadre prévu.", Adopter: "Intégrer l’usage au produit, proprement." },
+  },
 };
 
-export const VOICES: Record<Kind, { id: Voice; label: string; hint: string }[]> = {
+/** Critères proposés par l'IA. Concurrent : échelle 1 à 3 ; détournement : 1 à 5. */
+export const CRITERIA: Record<Kind, { id: string; name: string; cat?: Criterion["cat"] }[]> = {
   concurrent: [
-    { id: "concurrent", label: "Le concurrent", hint: "Comment réagirait-il à cette option ?" },
-    { id: "clients", label: "Vos clients", hint: "Qu’est-ce qui les ferait partir ou rester ?" },
-    { id: "marche", label: "Le marché", hint: "Tendances, prix, régulation, timing…" },
+    { id: "recouvrement", name: "Proximité avec notre produit" },
+    { id: "exposition", name: "Clients exposés" },
+    { id: "maturite", name: "Avancement du concurrent" },
+    { id: "capacite", name: "Moyens du concurrent" },
+    { id: "urgence", name: "Urgence" },
   ],
   detournement: [
-    { id: "utilisateurs", label: "Les utilisateurs", hint: "Ceux qui détournent l’usage : que perdent-ils ?" },
-    { id: "equipe", label: "L’équipe", hint: "Support, technique, coûts, risques…" },
-    { id: "marche", label: "Le marché", hint: "Concurrents, opportunité, image…" },
+    { id: "valeur", cat: "apporte", name: "Valeur pour les utilisateurs concernés" },
+    { id: "ampleur", cat: "apporte", name: "Ampleur de l’usage" },
+    { id: "effort", cat: "coute", name: "Effort pour l’adopter proprement" },
+    { id: "risque", cat: "coute", name: "Risque pour le produit" },
+    { id: "urgence", cat: "urgence", name: "Urgence" },
   ],
 };
+export const scaleMax = (k: Kind) => (k === "concurrent" ? 3 : 5);
 
-export const KIND_LABEL: Record<Kind, string> = {
-  concurrent: "Mouvement concurrent",
-  detournement: "Détournement d’usage",
-};
+export const STEPS = [
+  { label: "Décrire", sub: "le signal et votre position" },
+  { label: "Comprendre", sub: "la situation et l’enjeu" },
+  { label: "Mettre à l’épreuve", sub: "les options attaquées" },
+  { label: "Décider", sub: "décision et bilan" },
+] as const;
 
-export const STEPS = ["Décrire", "Comprendre", "Mettre à l’épreuve", "Évaluer", "Décider"] as const;
-
-/** Minimum d'objections par option pour lancer l'évaluation. */
-export const MIN_OBJECTIONS_PER_OPTION = 1;
-/** Une revue est proposée ce nombre de jours après la décision. */
-export const REVIEW_DELAY_DAYS = 30;
+export const READ_LABEL: Record<ReadStatus, string> = { sait: "On sait", suppose: "On suppose", ignore: "On ignore" };
+export const SUPPORT_LABEL: Record<Support, string> = { etayee: "Étayée", reformulee: "Reformulée", non: "Non étayée" };
+export const MOTIF_LABEL: Record<Motif, string> = { erreur: "Erreur de l’IA", contexte: "Information contextuelle" };
+export const CONF = ["faible", "moyenne", "élevée"] as const;
 
 export function newAnalysis(kind: Kind, id: string, now: Date): Analysis {
   const iso = now.toISOString();
   return {
-    id, kind, title: "", signal: "", source: "", anonymised: false,
-    startPosition: "", startReason: "", risks: [""],
-    known: [""], assumed: [""], unknown: [""], stake: "", threatened: [""],
-    objections: [], decisionReason: "", nextSteps: [""], abandoned: false,
-    step: 0, createdAt: iso, updatedAt: iso,
+    id, kind, title: "", signal: "", prevu: "", observe: "", contexte: "", position: "", positionWhy: "", risks: [""], anonymised: false,
+    launched: false, step: 0, summary: "", reading: [], criteria: [], blocking: false, staleEnjeu: false, staleObjections: false,
+    objections: [], corrections: [], decisionWhy: "", reviewDate: "", trigger: "", measure: "", abandoned: false, createdAt: iso, updatedAt: iso,
   };
 }
 
-/** Raisons qui empêchent de quitter l'étape « Décrire ». */
+export const filled = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
+export const titleOf = (a: Analysis) => {
+  if (a.title.trim()) return a.title.trim();
+  const src = (a.kind === "concurrent" ? a.signal : a.observe || a.prevu).trim();
+  if (!src) return "Analyse sans titre";
+  return src.length > 64 ? src.slice(0, 61).trim() + "…" : src;
+};
+
+/** Ce qui manque pour lancer l'analyse. */
 export function describeErrors(a: Analysis): string[] {
   const e: string[] = [];
-  if (!a.title.trim()) e.push("Donnez un titre à l’analyse.");
-  if (a.signal.trim().length < 20) e.push("Racontez le signal en quelques phrases (20 caractères minimum).");
-  if (!a.anonymised) e.push("Confirmez que la description est anonymisée.");
-  if (!a.startPosition) e.push("Choisissez votre position de départ.");
-  if (!a.startReason.trim()) e.push("Expliquez votre position en une phrase.");
+  if (a.kind === "concurrent") {
+    if (!a.signal.trim()) e.push("Décrivez le signal concurrent en une phrase au moins.");
+  } else {
+    if (!a.prevu.trim()) e.push("Décrivez l’usage prévu.");
+    if (!a.observe.trim()) e.push("Décrivez l’usage observé.");
+  }
+  if (!a.position) e.push("Choisissez votre position de départ.");
+  if (!a.anonymised) e.push("Confirmez l’anonymisation des informations saisies.");
   return e;
 }
 
-export function understandErrors(a: Analysis): string[] {
-  const e: string[] = [];
-  if (!filled(a.known).length) e.push("Notez au moins un fait connu.");
-  if (!a.readingConfidence) e.push("Indiquez la confiance dans votre lecture.");
-  if (!a.stake.trim()) e.push("Décrivez l’enjeu.");
-  if (!a.severity) e.push("Évaluez la gravité.");
-  return e;
+const avg = (xs: number[]) => xs.reduce((p, c) => p + c, 0) / xs.length;
+const fmt = (x: number) => x.toFixed(1).replace(".", ",");
+const lvlCat = (x: number) => (x >= 3.5 ? "forte" : x < 2.5 ? "faible" : "partagée");
+const Z = ["Surveiller", "Ajuster", "Riposter"];
+
+export interface Trend { label: string; conf: number; lines: string[]; reasons: string[]; fast: boolean; partagee: boolean }
+
+/** Tendance calculée à partir des critères (valeurs retenues) et de la lecture. */
+export function trend(kind: Kind, criteria: Criterion[], reading: ReadingItem[], blocking: boolean, useAI = false): Trend | null {
+  if (!criteria.length) return null;
+  const v: Record<string, number> = {};
+  criteria.forEach((c) => (v[c.id] = useAI ? c.ai : c.value));
+  const unknown = reading.filter((i) => i.status === "ignore").length;
+  let conf = unknown >= 3 ? 0 : unknown >= 1 ? 1 : 2;
+  const reasons = [unknown === 0 ? "aucune information dans « On ignore »" : `${unknown} information${unknown > 1 ? "s" : ""} dans « On ignore »`];
+  const lines: string[] = [];
+  if (kind === "concurrent") {
+    const R = v["recouvrement"] ?? 1, E = v["exposition"] ?? 1, M = v["maturite"] ?? 1, C = v["capacite"] ?? 1, U = v["urgence"] ?? 1;
+    let z = R === 3 && E === 3 && (M >= 2 || U === 3) ? 2 : R >= 2 && (E >= 2 || U >= 2) ? 1 : 0;
+    const base = z;
+    lines.push(z === 2 ? "Règle « Riposter » remplie : notre produit est directement concerné, des clients sont fortement exposés, et le concurrent est au moins moyennement avancé ou l’urgence est forte."
+      : z === 1 ? "Règle « Ajuster » : notre produit est au moins moyennement concerné, et les clients exposés ou l’urgence sont au moins au niveau moyen. La règle « Riposter » n’est pas remplie."
+      : "Ni « Riposter » ni « Ajuster » ne sont remplies : zone « Surveiller ».");
+    if (C === 1 && z > 0) { z--; lines.push(`Moyens du concurrent faibles : zone abaissée d’un cran (${Z[base]} → ${Z[z]}).`); }
+    return { label: Z[z]!, conf, lines, reasons, fast: false, partagee: false };
+  }
+  const ap = avg([v["valeur"] ?? 1, v["ampleur"] ?? 1]), co = avg([v["effort"] ?? 1, v["risque"] ?? 1]), ur = v["urgence"] ?? 1;
+  const ca = lvlCat(ap), cc = lvlCat(co);
+  let label: string;
+  if (blocking && !useAI) { label = "Corriger"; lines.push("Critère bloquant (sécurité, données ou juridique) identifié : tendance « Corriger », quels que soient les scores."); }
+  else if (ca === "partagée" || cc === "partagée") { label = PART; lines.push(`Apporte ${ca} (${fmt(ap)}), Coûte ${cc} (${fmt(co)}) : au moins une catégorie partagée, aucune tendance catégorique.`); }
+  else {
+    const M: Record<string, string> = { "forte|faible": "Adopter", "forte|forte": TRP, "faible|faible": "Tolérer", "faible|forte": "Corriger" };
+    label = M[`${ca}|${cc}`]!; lines.push(`Apporte ${ca} (${fmt(ap)}) · Coûte ${cc} (${fmt(co)}) → ${label}.`);
+  }
+  const partagee = label === PART;
+  if (partagee) { conf = Math.max(0, conf - 1); reasons.push("catégorie partagée : confiance abaissée d’un niveau"); }
+  const fast = ur >= 4;
+  if (fast) lines.push("Urgence ≥ 4 : la tendance ne change pas ; signal « À revoir vite » ajouté.");
+  return { label, conf, lines, reasons, fast, partagee };
 }
 
-export function testErrors(a: Analysis): string[] {
-  return OPTIONS[a.kind]
-    .filter((o) => a.objections.filter((x) => x.option === o && x.text.trim()).length < MIN_OBJECTIONS_PER_OPTION)
-    .map((o) => `Ajoutez au moins une objection contre « ${o} ».`);
+export type Solidity = "solide" | "partielle" | "fragile";
+/** Solidité de l'attaque : solide si au moins deux objections étayées, partielle s'il y en a une, fragile sinon. */
+export function solidity(a: Analysis, option: string): Solidity {
+  const n = a.objections.filter((o) => o.option === option && o.support === "etayee").length;
+  return n >= 2 ? "solide" : n === 1 ? "partielle" : "fragile";
 }
 
-export function evaluateErrors(a: Analysis): string[] {
-  const e: string[] = [];
-  const missing = realObjections(a).filter((o) => !o.verdict).length;
-  if (missing) e.push(`${missing} objection${missing > 1 ? "s" : ""} sans verdict.`);
-  if (!a.changedMind) e.push("Dites si l’épreuve a changé votre avis.");
-  if (!a.decisionConfidence) e.push("Indiquez votre confiance dans la décision.");
-  return e;
+export const isEvaluated = (o: Objection) => !!o.useful && !!o.novel;
+export function evalStats(a: Analysis) {
+  const done = a.objections.filter(isEvaluated).length;
+  return { done, total: a.objections.length, complete: a.objections.length > 0 && done === a.objections.length };
 }
 
-export function decideErrors(a: Analysis): string[] {
+export interface Outcome { label: string; success: boolean; useful: number; lines: string[] }
+/** Issue calculée : une objection compte comme apport utile uniquement si « utile » et « nouvelle » sont « Oui ». */
+export function outcome(a: Analysis): Outcome | null {
+  const es = evalStats(a);
+  if (!es.complete || !a.decision) return null;
+  const useful = a.objections.filter((o) => o.useful === "oui" && o.novel === "oui").length;
+  const none = a.position === NSP, changed = !none && a.decision !== a.position;
+  const uL = `${useful} objection${useful > 1 ? "s" : ""} jugée${useful > 1 ? "s" : ""} à la fois utile${useful > 1 ? "s" : ""} pour décider et nouvelle${useful > 1 ? "s" : ""}.`;
+  const dL = none ? `Sans position de départ : décision construite pendant l’analyse (${a.decision}).` : changed ? `Décision changée : ${a.position} → ${a.decision}.` : `Décision inchangée : ${a.position}.`;
+  const rule = "Règle : une objection compte comme apport utile uniquement si les deux réponses sont « Oui ».";
+  if (useful === 0) return { label: "Échec", success: false, useful, lines: ["Aucune objection jugée à la fois utile et nouvelle.", dL, ...(changed ? ["Le changement de décision vient d’ailleurs que des objections."] : []), rule] };
+  if (none) return { label: "Succès · décision construite", success: true, useful, lines: [uL, dL, rule] };
+  if (changed) return { label: "Succès fort", success: true, useful, lines: [uL, dL, rule] };
+  return { label: "Succès", success: true, useful, lines: [uL, dL + " Décision confortée, mieux argumentée.", rule] };
+}
+
+export function decideErrors(a: Analysis, aiTrend: string | null): string[] {
   const e: string[] = [];
   if (!a.decision) e.push("Choisissez une décision.");
-  if (!a.decisionReason.trim()) e.push("Justifiez la décision.");
+  if (a.decision && aiTrend && a.decision !== aiTrend && !a.decisionWhy.trim()) e.push("Votre décision diffère de la tendance proposée par l’IA : expliquez ce qui motive l’écart.");
+  if (!a.reviewDate && !a.trigger.trim()) e.push("Indiquez une date de revue ou un signal déclencheur.");
+  if (!a.measure.trim()) e.push("Indiquez une idée de mesure.");
+  return e;
+}
+export function closeErrors(a: Analysis): string[] {
+  const e: string[] = [];
+  const s = evalStats(a);
+  if (!s.complete) e.push(`${s.total - s.done} objection${s.total - s.done > 1 ? "s" : ""} reste${s.total - s.done > 1 ? "nt" : ""} à évaluer.`);
+  if (!a.pertinence || !a.effort) e.push("Répondez aux deux dernières questions pour clore l’analyse.");
   return e;
 }
 
-export const STEP_CHECKS = [describeErrors, understandErrors, testErrors, evaluateErrors, decideErrors];
-
-export const filled = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
-export const realObjections = (a: Analysis) => a.objections.filter((o) => o.text.trim());
-
-export type Robustness = "solide" | "ajustements" | "a_revoir";
-
-/** Solidité d'une option : une objection bloquante => à revoir ; une à traiter => ajustements. */
-export function optionRobustness(a: Analysis, option: string): Robustness | null {
-  const objs = realObjections(a).filter((o) => o.option === option);
-  if (!objs.length || objs.some((o) => !o.verdict)) return null;
-  if (objs.some((o) => o.verdict === "bloquante")) return "a_revoir";
-  if (objs.some((o) => o.verdict === "a_traiter")) return "ajustements";
-  return "solide";
-}
-
-export const ROBUSTNESS_LABEL: Record<Robustness, string> = {
-  solide: "Tient face aux objections",
-  ajustements: "Tient avec ajustements",
-  a_revoir: "Ne tient pas en l’état",
-};
-
-/** Option suggérée : la plus solide, puis la moins contestée. */
-export function suggestedOption(a: Analysis): string | null {
-  const rank: Record<Robustness, number> = { solide: 0, ajustements: 1, a_revoir: 2 };
-  const scored = OPTIONS[a.kind]
-    .map((o) => ({ o, r: optionRobustness(a, o), n: realObjections(a).filter((x) => x.option === o && x.verdict !== "ecartee").length }))
-    .filter((x) => x.r);
-  if (!scored.length) return null;
-  scored.sort((x, y) => rank[x.r!] - rank[y.r!] || x.n - y.n);
-  return scored[0]!.o;
-}
-
-export type Status = "en_cours" | "eval_incomplete" | "terminee" | "revue_a_faire" | "revue" | "abandonnee";
-
-export function status(a: Analysis, now: Date): Status {
+export type Status = "en_cours" | "eval_incomplete" | "bloquee" | "evaluee" | "abandonnee";
+export function status(a: Analysis): Status {
   if (a.abandoned) return "abandonnee";
-  if (a.review) return "revue";
-  if (a.completedAt) {
-    return a.reviewDue && new Date(a.reviewDue) <= now ? "revue_a_faire" : "terminee";
-  }
-  if (a.step >= 3) return "eval_incomplete";
+  if (a.completedAt) return "evaluee";
+  if (a.techFail) return "bloquee";
+  if (a.step >= 3 && a.decision) return "eval_incomplete";
   return "en_cours";
 }
-
-export const STATUS_LABEL: Record<Status, string> = {
-  en_cours: "En cours",
-  eval_incomplete: "Évaluation incomplète",
-  terminee: "Terminée",
-  revue_a_faire: "Revue à faire",
-  revue: "Revue faite",
-  abandonnee: "Abandonnée",
+export const STATUS: Record<Status, { label: string; glyph: string; def: string }> = {
+  en_cours: { label: "En cours", glyph: "◐", def: "reprenable à l’étape atteinte." },
+  eval_incomplete: { label: "Évaluation incomplète", glyph: "…", def: "objections restant à évaluer ; reprenable." },
+  bloquee: { label: "Bloquée", glyph: "‖", def: "l’IA n’a pas pu produire une réponse complète ; relancez." },
+  evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultation seule." },
+  abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous ; consultation seule, sans issue." },
 };
-
-export function reviewDueDate(completed: Date): string {
-  const d = new Date(completed);
-  d.setDate(d.getDate() + REVIEW_DELAY_DAYS);
-  return d.toISOString();
-}
 
 /** Bilan des revues pour l'accueil. */
 export function reviewStats(list: Analysis[]) {
-  const reviewed = list.filter((a) => a.review);
-  const count = (o: ReviewOutcome) => reviewed.filter((a) => a.review!.outcome === o).length;
-  return { total: list.length, reviewed: reviewed.length, tenu: count("tenu"), partiel: count("partiel"), pasTenu: count("pas_tenu") };
+  const r = list.filter((a) => a.review);
+  const c = (h: ReviewHolds) => r.filter((a) => a.review!.holds === h).length;
+  return { count: r.length, oui: c("oui"), partie: c("en_partie"), non: c("non") };
+}
+
+/** Texte brut de la synthèse, à coller dans un message. */
+export function synthesisText(a: Analysis, pm: string): string {
+  const t = trend(a.kind, a.criteria, a.reading, a.blocking);
+  const key = a.objections.find((o) => o.id === a.keyObjection);
+  return [
+    `Contre-feu · ${titleOf(a)}`,
+    `${KIND[a.kind].name}${pm ? " · " + pm : ""}`,
+    "",
+    `Situation : ${a.summary || (a.kind === "concurrent" ? a.signal : a.observe)}`,
+    `Position de départ : ${a.position}${a.positionWhy ? " — " + a.positionWhy : ""}`,
+    `Recommandation de Contre-feu (IA) : ${t?.label ?? "—"} · confiance ${t ? CONF[t.conf] : "—"}${a.aiTrendInitial && a.aiTrendInitial !== t?.label ? ` (proposition initiale : ${a.aiTrendInitial})` : ""}`,
+    `Décision du PM : ${a.decision ?? "—"}`,
+    a.decisionWhy ? `Pourquoi : ${a.decisionWhy}` : "",
+    key ? `Objection déterminante (${key.role}, ${key.option}) : « ${key.text} »` : "",
+    `Revue : ${a.reviewDate ? new Date(a.reviewDate).toLocaleDateString("fr-FR") : ""}${a.trigger ? (a.reviewDate ? " ou " : "") + a.trigger : ""} · mesure : ${a.measure}`,
+    filled(a.risks).length ? `Risques déjà identifiés : ${filled(a.risks).join(" ; ")}` : "",
+    "",
+    "Contre-feu éclaire la décision mais ne décide pas.",
+  ].filter((x, i, arr) => x !== "" || arr[i - 1] !== "").join("\n");
 }
