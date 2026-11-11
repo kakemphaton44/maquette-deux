@@ -219,7 +219,7 @@ function Understand({ a, up }: StepProps) {
       <AIBar label="Proposer une lecture (IA)" busy={ai.busy} err={ai.err} onClick={async () => {
         const r = await ai.run("lecture"); if (!r) return;
         const merge = (cur: string[], add: string[]) => [...filled(cur), ...add.map((x) => `${x} (IA)`)];
-        up({ known: merge(a.known, strs(r.known)), assumed: merge(a.assumed, strs(r.assumed)), unknown: merge(a.unknown, strs(r.unknown)), ...(a.stake.trim() || typeof r.stake !== "string" ? {} : { stake: r.stake }) });
+        up({ known: merge(a.known, strs(r["known"])), assumed: merge(a.assumed, strs(r["assumed"])), unknown: merge(a.unknown, strs(r["unknown"])), ...(a.stake.trim() || typeof r["stake"] !== "string" ? {} : { stake: r["stake"] as string }) });
       }} />
       <div className="grid gap-5 md:grid-cols-3">
         {([["known", "Ce qu’on sait", "Un fait vérifié"], ["assumed", "Ce qu’on suppose", "Une hypothèse"], ["unknown", "Ce qu’on ignore", "Une question ouverte"]] as const).map(([k, l, p]) => (
@@ -249,9 +249,9 @@ function Test({ a, up }: StepProps) {
     <>
       <StepHead tag="Étape 3 · le cœur de Contre-feu" title="Qui attaquerait vos" accent="options" text="Pour chaque option, prenez la place de ceux qu’elle touche et écrivez leurs meilleures objections. Soyez sévère : une objection faible ne vous apprend rien." />
       <AIBar label="Proposer des objections (IA)" busy={ai.busy} err={ai.err} onClick={async () => {
-        const r = await ai.run("objections"); if (!r || !Array.isArray(r.objections)) return;
+        const r = await ai.run("objections"); if (!r || !Array.isArray(r["objections"])) return;
         const voices = VOICES[a.kind].map((v) => v.id) as string[];
-        const add: Objection[] = (r.objections as Record<string, string>[]).filter((o) => OPTIONS[a.kind].includes(o.option ?? "") && voices.includes(o.voice ?? "") && o.text).map((o) => ({ id: crypto.randomUUID(), option: o.option!, voice: o.voice as Objection["voice"], text: o.text!, origin: "ia", support: (["etayee", "reformulee", "non"].includes(o.support ?? "") ? o.support : "non") as Objection["support"], premise: o.premise }));
+        const add: Objection[] = (r["objections"] as { option?: string; voice?: string; text?: string; support?: string; premise?: string }[]).filter((o) => OPTIONS[a.kind].includes(o.option ?? "") && voices.includes(o.voice ?? "") && o.text).map((o) => ({ id: crypto.randomUUID(), option: o.option!, voice: o.voice as Objection["voice"], text: o.text!, origin: "ia", support: (["etayee", "reformulee", "non"].includes(o.support ?? "") ? o.support : "non") as Objection["support"], premise: o.premise }));
         setObjs([...a.objections, ...add]);
       }} />
       <div className="flex flex-wrap gap-2">
