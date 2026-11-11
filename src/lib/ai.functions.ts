@@ -17,7 +17,7 @@ export const runAI = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const key = process.env["OPENAI_API_KEY"];
-    if (!key) return { error: "Clé OpenAI absente." };
+    if (!key) return { result: "", error: "Clé OpenAI absente." };
     const ctx = `Type : ${data.kind === "concurrent" ? "mouvement concurrent" : "détournement d'usage"}\nTitre : ${data.title}\nSignal : ${data.signal}\nPosition de départ : ${data.startPosition}\nFaits connus : ${data.known.join(" ; ")}\nSuppositions : ${data.assumed.join(" ; ")}`;
     const prompt = data.task === "lecture"
       ? `${ctx}\n\nSépare la situation. Réponds en JSON : {"known":[faits établis par le signal],"assumed":[hypothèses],"unknown":[questions ouvertes],"stake":"enjeu en 1-2 phrases"}. 2 à 4 éléments par liste, phrases courtes, en français.`
@@ -32,11 +32,11 @@ export const runAI = createServerFn({ method: "POST" })
           messages: [{ role: "system", content: "Tu es Contre-feu, un contradicteur rigoureux pour équipes produit. Tu ne prends pas la décision." }, { role: "user", content: prompt }],
         }),
       });
-      if (!r.ok) { console.error("OpenAI", r.status, await r.text()); return { error: r.status === 401 ? "La clé OpenAI est refusée." : r.status === 429 ? "Limite OpenAI atteinte, réessayez plus tard." : "L’IA n’a pas répondu." }; }
+      if (!r.ok) { console.error("OpenAI", r.status, await r.text()); return { result: "", error: r.status === 401 ? "La clé OpenAI est refusée." : r.status === 429 ? "Limite OpenAI atteinte, réessayez plus tard." : "L’IA n’a pas répondu." }; }
       const j = await r.json();
-      return { result: JSON.parse(j.choices[0].message.content) as Record<string, unknown> };
+      return { result: String(j.choices[0].message.content) };
     } catch (e) {
       console.error(e);
-      return { error: "L’IA n’a pas pu produire une réponse complète." };
+      return { result: "", error: "L’IA n’a pas pu produire une réponse complète." };
     }
   });

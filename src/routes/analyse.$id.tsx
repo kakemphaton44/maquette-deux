@@ -22,8 +22,8 @@ function useAI(a: Analysis) {
     setBusy(true); setErr("");
     try {
       const r = await fn({ data: { task, kind: a.kind, title: a.title, signal: a.signal, startPosition: a.startPosition, options: OPTIONS[a.kind], voices: VOICES[a.kind].map((v) => ({ id: v.id, label: v.label })), known: filled(a.known), assumed: filled(a.assumed) } });
-      if ("error" in r && r.error) { setErr(r.error); return null; }
-      return (r as { result: Record<string, unknown> }).result;
+      if (r.error) { setErr(r.error); return null; }
+      return JSON.parse(r.result) as Record<string, unknown>;
     } catch { setErr("L’IA n’a pas pu répondre."); return null; } finally { setBusy(false); }
   };
   return { busy, err, run };
