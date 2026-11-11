@@ -10,7 +10,7 @@ import {
   closeErrors, decideErrors, describeErrors, evalStats, filled, outcome, scaleMax, solidity, status, titleOf, trend,
   type Analysis, type Criterion, type Motif, type Objection, type ReadStatus, type ReadingItem, type Support, type YesNo,
 } from "@/lib/analyses";
-import { saveAnalysis, useAnalyses } from "@/lib/store";
+import { getAnalysis, saveAnalysis, useAnalyses } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/analyse/$id")({
@@ -98,7 +98,7 @@ function useAI(a: Analysis, up: Up) {
 /* ———————————— Cadre ———————————— */
 function Workspace({ a }: { a: Analysis }) {
   const navigate = useNavigate();
-  const up: Up = (p) => saveAnalysis({ ...a, ...p });
+  const up: Up = (p) => saveAnalysis({ ...(getAnalysis(a.id) ?? a), ...p });
   const ai = useAI(a, up);
   const st = status(a);
   const readOnly = st === "evaluee" || st === "abandonnee";

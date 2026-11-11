@@ -68,3 +68,6 @@ export function setUserName(n: string) {
   localStorage.setItem(NAME_KEY, n);
   nameListeners.forEach((l) => l());
 }
+export function getAnalysis(id: string): Analysis | undefined {
+  return read().find((x) => x.id === id);
+}
