@@ -9,6 +9,35 @@ import {
 import { Missing } from "@/components/cf/Missing";
 import { saveAnalysis, useAnalyses } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { useServerFn } from "@tanstack/react-start";
+import { Sparkles } from "lucide-react";
+import { runAI } from "@/lib/ai.functions";
+import { filled } from "@/lib/analyses";
+
+function useAI(a: Analysis) {
+  const fn = useServerFn(runAI);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const run = async (task: "lecture" | "objections") => {
+    setBusy(true); setErr("");
+    try {
+      const r = await fn({ data: { task, kind: a.kind, title: a.title, signal: a.signal, startPosition: a.startPosition, options: OPTIONS[a.kind], voices: VOICES[a.kind].map((v) => ({ id: v.id, label: v.label })), known: filled(a.known), assumed: filled(a.assumed) } });
+      if (r.error) { setErr(r.error); return null; }
+      return JSON.parse(r.result) as Record<string, unknown>;
+    } catch { setErr("L’IA n’a pas pu répondre."); return null; } finally { setBusy(false); }
+  };
+  return { busy, err, run };
+}
+
+function AIBar({ label, busy, err, onClick }: { label: string; busy: boolean; err: string; onClick: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Btn variant="outline" disabled={busy} onClick={onClick}><Sparkles className="h-4 w-4" />{busy ? "Analyse en cours…" : label}</Btn>
+      {err && <span className="text-sm font-bold text-destructive">{err}</span>}
+    </div>
+  );
+}
+const strs = (x: unknown) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string") : []);
 
 export const Route = createFileRoute("/analyse/$id")({
   head: () => ({
@@ -183,9 +212,15 @@ function ConfidenceChips({ value, onChange }: { value: Confidence | undefined; o
 }
 
 function Understand({ a, up }: StepProps) {
+  const ai = useAI(a);
   return (
     <>
       <StepHead tag="Étape 2 · la situation et l’enjeu" title="Que sait-on" accent="vraiment" text="Séparez ce qui est établi de ce que vous supposez. Une décision prise sur des suppositions mérite une confiance plus faible." />
+      <AIBar label="Proposer une lecture (IA)" busy={ai.busy} err={ai.err} onClick={async () => {
+        const r = await ai.run("lecture"); if (!r) return;
+        const merge = (cur: string[], add: string[]) => [...filled(cur), ...add.map((x) => `${x} (IA)`)];
+        up({ known: merge(a.known, strs(r["known"])), assumed: merge(a.assumed, strs(r["assumed"])), unknown: merge(a.unknown, strs(r["unknown"])), ...(a.stake.trim() || typeof r["stake"] !== "string" ? {} : { stake: r["stake"] as string }) });
+      }} />
       <div className="grid gap-5 md:grid-cols-3">
         {([["known", "Ce qu’on sait", "Un fait vérifié"], ["assumed", "Ce qu’on suppose", "Une hypothèse"], ["unknown", "Ce qu’on ignore", "Une question ouverte"]] as const).map(([k, l, p]) => (
           <Card key={k} className="p-5">
@@ -209,9 +244,16 @@ function Understand({ a, up }: StepProps) {
 function Test({ a, up }: StepProps) {
   const [opt, setOpt] = useState<string>(OPTIONS[a.kind][0]!);
   const setObjs = (objections: Objection[]) => up({ objections });
+  const ai = useAI(a);
   return (
     <>
       <StepHead tag="Étape 3 · le cœur de Contre-feu" title="Qui attaquerait vos" accent="options" text="Pour chaque option, prenez la place de ceux qu’elle touche et écrivez leurs meilleures objections. Soyez sévère : une objection faible ne vous apprend rien." />
+      <AIBar label="Proposer des objections (IA)" busy={ai.busy} err={ai.err} onClick={async () => {
+        const r = await ai.run("objections"); if (!r || !Array.isArray(r["objections"])) return;
+        const voices = VOICES[a.kind].map((v) => v.id) as string[];
+        const add: Objection[] = (r["objections"] as { option?: string; voice?: string; text?: string; support?: string; premise?: string }[]).filter((o) => OPTIONS[a.kind].includes(o.option ?? "") && voices.includes(o.voice ?? "") && o.text).map((o) => ({ id: crypto.randomUUID(), option: o.option!, voice: o.voice as Objection["voice"], text: o.text!, origin: "ia", support: (["etayee", "reformulee", "non"].includes(o.support ?? "") ? o.support : "non") as Objection["support"], premise: o.premise }));
+        setObjs([...a.objections, ...add]);
+      }} />
       <div className="flex flex-wrap gap-2">
         {OPTIONS[a.kind].map((o) => {
           const n = realObjections(a).filter((x) => x.option === o).length;
@@ -225,9 +267,16 @@ function Test({ a, up }: StepProps) {
             <Card key={v.id} className="space-y-3 p-5">
               <div><h3 className="text-xl text-primary">{v.label}</h3><p className="text-sm text-muted-foreground">{v.hint}</p></div>
               {objs.map((o) => (
-                <div key={o.id} className="flex gap-2">
+                <div key={o.id} className="space-y-1">
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Pill tone={o.origin === "ia" ? "primary" : "soft"}>{o.origin === "ia" ? "Analyse de l’IA" : "Votre saisie"}</Pill>
+                  {o.support && <Pill tone={o.support === "etayee" ? "success" : o.support === "reformulee" ? "accent" : "muted"}>{{ etayee: "Étayée", reformulee: "Reformulée", non: "Non étayée" }[o.support]}</Pill>}
+                </div>
+                {o.premise && <p className="text-xs text-muted-foreground">Prémisse : {o.premise}</p>}
+                <div className="flex gap-2">
                   <textarea rows={2} className={inputCls} value={o.text} placeholder="Son objection…" onChange={(e) => setObjs(a.objections.map((x) => (x.id === o.id ? { ...x, text: e.target.value } : x)))} />
                   <button type="button" aria-label="Retirer l’objection" className="self-start rounded-full p-2 text-muted-foreground hover:bg-muted" onClick={() => setObjs(a.objections.filter((x) => x.id !== o.id))}><Trash2 className="h-4 w-4" /></button>
+                </div>
                 </div>
               ))}
               <button type="button" className="inline-flex items-center gap-1.5 text-sm font-bold text-accent" onClick={() => setObjs([...a.objections, { id: crypto.randomUUID(), option: opt, voice: v.id, text: "" }])}>

@@ -14,6 +14,10 @@ export interface Objection {
   text: string;
   verdict?: Verdict | undefined;
   answer?: string | undefined;
+  /** Proposée par l'IA ou saisie par l'utilisateur. */
+  origin?: "ia" | "user" | undefined;
+  support?: "etayee" | "reformulee" | "non" | undefined;
+  premise?: string | undefined;
 }
 
 export interface Analysis {
