@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Activity, Repeat } from "lucide-react";
 import { AppHeader, Card } from "@/components/cf/ui";
-import { KIND_LABEL, OPTIONS, newAnalysis, type Kind } from "@/lib/analyses";
+import { KIND, newAnalysis, type Kind } from "@/lib/analyses";
 import { saveAnalysis } from "@/lib/store";
 
 export const Route = createFileRoute("/nouvelle")({
@@ -43,9 +43,9 @@ function NewAnalysis() {
               <button key={k} type="button" onClick={() => start(k)} className="text-left">
                 <Card className="h-full border-2 transition hover:-translate-y-1 hover:border-primary">
                   <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-6 w-6" /></span>
-                  <h2 className="mt-5 text-3xl text-primary">{KIND_LABEL[k]}</h2>
+                  <h2 className="mt-5 text-3xl text-primary">{KIND[k].name}</h2>
                   <p className="mt-2 text-muted-foreground">{text}</p>
-                  <p className="mt-4 text-sm font-bold text-accent">{OPTIONS[k].join(" · ").toLowerCase()}</p>
+                  <p className="mt-4 text-sm font-bold text-accent">{KIND[k].decisions.join(" · ")}</p>
                 </Card>
               </button>
             );

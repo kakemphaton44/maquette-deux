@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { Analysis } from "./analyses";
 
 // Analyses conservées dans ce navigateur uniquement.
-const KEY = "contre-feu:analyses";
+const KEY = "contre-feu:analyses-v3";
 const NAME_KEY = "contre-feu:nom";
 const listeners = new Set<() => void>();
 let cache: Analysis[] | null = null;
@@ -67,4 +67,7 @@ export function useUserName() {
 export function setUserName(n: string) {
   localStorage.setItem(NAME_KEY, n);
   nameListeners.forEach((l) => l());
+}
+export function getAnalysis(id: string): Analysis | undefined {
+  return read().find((x) => x.id === id);
 }
