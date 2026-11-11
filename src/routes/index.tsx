@@ -34,7 +34,7 @@ function Home() {
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-7xl space-y-8 px-6 py-10">
+      <main className="w-full space-y-8 px-6 lg:px-10 py-10">
         <section className="grid gap-8 rounded-[2rem] bg-primary p-10 text-primary-foreground md:grid-cols-[1.4fr_1fr]">
           <div className="space-y-5">
             <p className="text-xs font-bold uppercase tracking-wider text-highlight">Aide à la décision · Product Managers SaaS B2B</p>
