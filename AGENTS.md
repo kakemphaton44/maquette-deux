@@ -30,4 +30,4 @@ use the editor.
 <!-- LOVABLE:END -->
 
 
-- Contre-feu is frontend-only (user declined backend and AI): business rules live as pure functions in src/lib/analyses.ts (tested), persistence via the localStorage store in src/lib/store.ts. Why: keeps rules testable and storage swappable.
+- Contre-feu keeps analyses in the browser (src/lib/store.ts) and its business rules as pure tested functions in src/lib/analyses.ts; the only server code is src/lib/ai.functions.ts calling OpenAI with OPENAI_API_KEY (the starting position is never sent). Why: rules stay testable, storage swappable, secrets server-side.
