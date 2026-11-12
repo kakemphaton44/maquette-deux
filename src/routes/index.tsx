@@ -12,6 +12,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Contre-feu lit la situation, propose une tendance argumentée, puis fait attaquer chaque option, avant que vous ne décidiez." },
       { property: "og:title", content: "Contre-feu — Un signal vient d’arriver ?" },
       { property: "og:description", content: "Mouvement concurrent ou détournement d’usage : une décision argumentée, sans que l’IA décide à votre place." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Home,

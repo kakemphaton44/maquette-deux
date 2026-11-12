@@ -13,6 +13,8 @@ export const Route = createFileRoute("/synthese/$id")({
       { name: "description", content: "La recommandation de l’IA et la décision du PM, présentées séparément, prêtes à partager." },
       { property: "og:title", content: "Contre-feu — Synthèse de décision" },
       { property: "og:description", content: "Une synthèse copiable, prête pour la réunion." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Synthese,

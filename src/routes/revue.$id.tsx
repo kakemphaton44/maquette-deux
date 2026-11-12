@@ -12,6 +12,8 @@ export const Route = createFileRoute("/revue/$id")({
       { name: "description", content: "Deux questions, quelques semaines après la décision : a-t-elle tenu ?" },
       { property: "og:title", content: "Contre-feu — Revue de décision" },
       { property: "og:description", content: "La revue alimente le bilan de vos décisions." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Revue,

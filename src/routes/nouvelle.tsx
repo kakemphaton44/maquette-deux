@@ -11,6 +11,8 @@ export const Route = createFileRoute("/nouvelle")({
       { name: "description", content: "Décrivez un mouvement concurrent ou un détournement d’usage et mettez vos options à l’épreuve." },
       { property: "og:title", content: "Contre-feu — Nouvelle analyse" },
       { property: "og:description", content: "Choisissez le type de situation et lancez l’analyse." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: NewAnalysis,

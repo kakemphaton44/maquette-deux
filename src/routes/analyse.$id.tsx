@@ -20,6 +20,8 @@ export const Route = createFileRoute("/analyse/$id")({
       { name: "description", content: "Six étapes : décrire, lire la situation, évaluer l’enjeu, mettre les options à l’épreuve, décider, évaluer les objections." },
       { property: "og:title", content: "Contre-feu — Analyse" },
       { property: "og:description", content: "L’IA lit la situation et attaque vos options ; vous décidez." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AnalysisPage,
