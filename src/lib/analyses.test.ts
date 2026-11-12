@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -65,5 +65,18 @@ describe("décider", () => {
     const a = { ...base(), decision: "Riposter" } as Analysis;
     expect(decideErrors(a, "Ajuster")).toHaveLength(3);
     expect(decideErrors({ ...a, decisionWhy: "x", trigger: "y", measure: "z" }, "Ajuster")).toHaveLength(0);
+  });
+});
+
+describe("statut (parcours en six étapes)", () => {
+  const base = () => ({ ...newAnalysis("concurrent", "x", new Date()), launched: true });
+  it("évaluation incomplète dès l'étape 6", () => {
+    expect(status({ ...base(), step: 5, decision: "Surveiller" })).toBe("eval_incomplete");
+  });
+  it("décision non validée (étape 5) reste en cours", () => {
+    expect(status({ ...base(), step: 4, decision: "Surveiller" })).toBe("en_cours");
+  });
+  it("évaluation périmée → bloquée", () => {
+    expect(status({ ...base(), step: 2, staleEnjeu: true })).toBe("bloquee");
   });
 });

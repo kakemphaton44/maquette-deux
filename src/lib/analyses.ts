@@ -43,6 +43,11 @@ export interface Objection {
   novel?: YesNo | undefined;
 }
 
+export interface Question { id: string; text: string; why: string; answer: string; skipped: boolean }
+export interface Scenario { name: string; proof: string; title: string; desc: string; gains: string[]; facts: string[]; note?: string | undefined }
+export interface Manque { id: string; proof: string; title: string; appui: string }
+export interface ProOpp { label: string; pro: string[]; con: string[] }
+
 export interface CorrectionLog { at: string; name: string; from: string; to: string; ai: string; motif: Motif; note?: string | undefined }
 
 export interface Analysis {
@@ -58,6 +63,13 @@ export interface Analysis {
   risks: string[];
   anonymised: boolean;
   launched: boolean;
+  fiches: Record<string, string>;
+  questions: Question[];
+  questionsDone: boolean;
+  scenarios: Scenario[];
+  manques: Manque[];
+  manqueId?: string | undefined;
+  po?: ProOpp | undefined;
   step: number;
   summary: string;
   reading: ReadingItem[];
@@ -125,11 +137,40 @@ export const CRITERIA: Record<Kind, { id: string; name: string; cat?: Criterion[
 export const scaleMax = (k: Kind) => (k === "concurrent" ? 3 : 5);
 
 export const STEPS = [
-  { label: "Décrire", sub: "le signal et votre position" },
-  { label: "Comprendre", sub: "la situation et l’enjeu" },
-  { label: "Mettre à l’épreuve", sub: "les options attaquées" },
-  { label: "Décider", sub: "décision et bilan" },
+  { label: "Nouvelle analyse", sub: "le signal et votre position" },
+  { label: "Analyse de la situation", sub: "questions, on sait / on suppose / on ignore" },
+  { label: "Évaluation de l’enjeu", sub: "critères et tendance" },
+  { label: "Mise à l’épreuve des options", sub: "trois rôles attaquent chaque option" },
+  { label: "Décision et synthèse", sub: "votre décision, distincte de l’IA" },
+  { label: "Évaluation des objections", sub: "utile ? nouvelle ? issue calculée" },
 ] as const;
+export const DECIDE_STEP = 4;
+export const EVAL_STEP = 5;
+
+/** Fiches de contexte : champs facultatifs, laissés vides s'ils sont inconnus. */
+export const FICHES: Record<Kind, { id: string; title: string; fields: { key: string; label: string }[] }[]> = {
+  concurrent: [
+    { id: "produit", title: "Fiche contexte produit", fields: [
+      { key: "cible", label: "Cibles" }, { key: "fonctions", label: "Fonctions clés" },
+      { key: "existant", label: "Ce que vous proposez déjà sur ce sujet" }, { key: "positionnement", label: "Positionnement face aux concurrents" } ] },
+    { id: "concurrent", title: "Fiche concurrent", fields: [
+      { key: "nom", label: "Nom du concurrent" }, { key: "cible", label: "Cible" },
+      { key: "forces", label: "Forces connues" }, { key: "capacite", label: "Capacité de livraison" } ] },
+  ],
+  detournement: [
+    { id: "usage", title: "Fiche contexte d’usage", fields: [
+      { key: "module", label: "Module concerné" }, { key: "users", label: "Utilisateurs" },
+      { key: "regles", label: "Règles ou comportements notables du module" }, { key: "conservation", label: "Contraintes de conservation des données" } ] },
+  ],
+};
+export const ficheKey = (fiche: string, field: string) => `${fiche}.${field}`;
+/** Champs de fiche restés vides, pour l'avertissement « contexte incomplet ». */
+export function missingContext(a: Analysis): string[] {
+  return FICHES[a.kind].flatMap((f) => f.fields.filter((x) => !(a.fiches?.[ficheKey(f.id, x.key)] ?? "").trim()).map((x) => x.label));
+}
+export function ficheText(a: Analysis): string {
+  return FICHES[a.kind].map((f) => `${f.title} :\n` + f.fields.map((x) => `- ${x.label} : ${(a.fiches?.[ficheKey(f.id, x.key)] ?? "").trim() || "(non renseigné)"}`).join("\n")).join("\n");
+}
 
 export const READ_LABEL: Record<ReadStatus, string> = { sait: "On sait", suppose: "On suppose", ignore: "On ignore" };
 export const SUPPORT_LABEL: Record<Support, string> = { etayee: "Étayée", reformulee: "Reformulée", non: "Non étayée" };
@@ -140,9 +181,14 @@ export function newAnalysis(kind: Kind, id: string, now: Date): Analysis {
   const iso = now.toISOString();
   return {
     id, kind, title: "", signal: "", prevu: "", observe: "", contexte: "", position: "", positionWhy: "", risks: [""], anonymised: false,
-    launched: false, step: 0, summary: "", reading: [], criteria: [], blocking: false, staleEnjeu: false, staleObjections: false,
+    launched: false, fiches: {}, questions: [], questionsDone: false, scenarios: [], manques: [], step: 0, summary: "", reading: [], criteria: [], blocking: false, staleEnjeu: false, staleObjections: false,
     objections: [], corrections: [], decisionWhy: "", reviewDate: "", trigger: "", measure: "", abandoned: false, createdAt: iso, updatedAt: iso,
   };
+}
+
+/** Complète les analyses enregistrées avec une version antérieure. */
+export function normalize(a: Analysis): Analysis {
+  return { ...a, fiches: a.fiches ?? {}, questions: a.questions ?? [], questionsDone: a.questionsDone ?? !!a.launched, scenarios: a.scenarios ?? [], manques: a.manques ?? [] };
 }
 
 export const filled = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
@@ -259,13 +305,14 @@ export function status(a: Analysis): Status {
   if (a.abandoned) return "abandonnee";
   if (a.completedAt) return "evaluee";
   if (a.techFail) return "bloquee";
-  if (a.step >= 3 && a.decision) return "eval_incomplete";
+  if (a.step >= EVAL_STEP) return "eval_incomplete";
+  if (a.staleEnjeu || a.staleObjections) return "bloquee";
   return "en_cours";
 }
 export const STATUS: Record<Status, { label: string; glyph: string; def: string }> = {
   en_cours: { label: "En cours", glyph: "◐", def: "reprenable à l’étape atteinte." },
   eval_incomplete: { label: "Évaluation incomplète", glyph: "…", def: "objections restant à évaluer ; reprenable." },
-  bloquee: { label: "Bloquée", glyph: "‖", def: "l’IA n’a pas pu produire une réponse complète ; relancez." },
+  bloquee: { label: "Bloquée", glyph: "‖", def: "une action est requise avant de continuer (regénérer une étape ou relancer l’IA)." },
   evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultation seule." },
   abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous ; consultation seule, sans issue." },
 };

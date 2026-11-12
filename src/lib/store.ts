@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { Analysis } from "./analyses";
+import { normalize, type Analysis } from "./analyses";
 
 // Analyses conservées dans ce navigateur uniquement.
 const KEY = "contre-feu:analyses-v3";
@@ -11,7 +11,7 @@ const EMPTY: Analysis[] = [];
 function read(): Analysis[] {
   if (cache) return cache;
   try {
-    cache = JSON.parse(localStorage.getItem(KEY) || "[]");
+    cache = (JSON.parse(localStorage.getItem(KEY) || "[]") as Analysis[]).map(normalize);
   } catch {
     cache = [];
   }

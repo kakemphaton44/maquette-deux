@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Download, Trash2, Upload } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { AppHeader, Btn, Card, Pill, inputCls } from "@/components/cf/ui";
 import { KIND, STATUS, STEPS, newAnalysis, reviewStats, status, titleOf, type Analysis, type Kind } from "@/lib/analyses";
 import { deleteAnalysis, exportAll, importAll, saveAnalysis, setUserName, useAnalyses, useUserName } from "@/lib/store";
@@ -24,7 +24,9 @@ function Home() {
   const name = useUserName();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [nameErr, setNameErr] = useState(false);
   const start = (kind: Kind) => {
+    if (!name.trim()) { setNameErr(true); document.getElementById("cf-name")?.focus(); return; }
     const a = newAnalysis(kind, crypto.randomUUID(), new Date());
     saveAnalysis(a);
     navigate({ to: "/analyse/$id", params: { id: a.id } });
@@ -38,11 +40,12 @@ function Home() {
         <section className="grid gap-8 rounded-[2rem] bg-primary p-10 text-primary-foreground md:grid-cols-[1.4fr_1fr]">
           <div className="space-y-5">
             <p className="text-xs font-bold uppercase tracking-wider text-highlight">Aide à la décision · Product Managers SaaS B2B</p>
-            <h1 className="text-6xl leading-[1.05]">Un signal vient <em className="text-highlight">d’arriver</em> ?</h1>
+            <h1 className="text-7xl leading-[1.05]">Contre<em className="text-highlight">–</em>feu</h1>
             <p className="max-w-xl text-lg text-primary-foreground/80">Contre-feu lit la situation, propose une tendance argumentée, puis fait attaquer chaque option, avant que vous ne décidiez.</p>
             <label className="block max-w-sm space-y-1">
               <span className="text-sm font-bold">Votre nom pour cette séance</span>
-              <input className={inputCls + " text-foreground"} value={name} placeholder="Prénom ou initiales" onChange={(e) => setUserName(e.target.value)} />
+              <input id="cf-name" className={inputCls + " text-foreground"} value={name} placeholder="Prénom ou initiales" onChange={(e) => { setUserName(e.target.value); setNameErr(false); }} />
+              {nameErr && <span className="block text-sm font-bold text-highlight">Indiquez un nom pour identifier l’auteur de l’analyse.</span>}
               <span className="block text-xs text-primary-foreground/70">Aucun compte, aucune connexion. Le nom reste dans votre navigateur, apparaît dans la synthèse et n’est jamais transmis à l’IA.</span>
             </label>
           </div>
@@ -52,7 +55,7 @@ function Home() {
                 <p className="text-xs font-bold uppercase tracking-wider text-highlight">Dernière analyse à reprendre</p>
                 <p className="mt-1 font-display text-2xl">{titleOf(resume)}</p>
                 <p className="text-sm text-primary-foreground/70">{STATUS[status(resume)].glyph} {STATUS[status(resume)].label} · {STEPS[resume.step]?.label}</p>
-                <p className="mt-2 text-sm font-bold">Reprendre →</p>
+                <p className="mt-2 text-sm font-bold">{status(resume) === "eval_incomplete" ? "Finir l’évaluation" : status(resume) === "bloquee" ? "Débloquer" : "Reprendre"} →</p>
               </Link>
             )}
             <p className="text-sm text-primary-foreground/70">Contre-feu ne décide jamais à votre place : la recommandation de l’IA et votre décision restent distinctes.</p>

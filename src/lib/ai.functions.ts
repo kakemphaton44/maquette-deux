@@ -3,7 +3,9 @@ import { z } from "zod";
 
 // La position de départ n'est jamais transmise à l'IA.
 const Input = z.object({
-  task: z.enum(["lecture", "enjeu", "objections"]),
+  task: z.enum(["questions", "lecture", "enjeu", "objections"]),
+  fiches: z.string().max(6000).default(""),
+  answers: z.array(z.object({ q: z.string(), a: z.string() })).max(10).default([]),
   kind: z.enum(["concurrent", "detournement"]),
   signal: z.string().max(6000),
   prevu: z.string().max(3000),
@@ -24,18 +26,24 @@ export const runAI = createServerFn({ method: "POST" })
     const conc = data.kind === "concurrent";
     const scale = conc ? "1 (faible) à 3 (fort)" : "1 (faible) à 5 (fort)";
     const ctx = conc
-      ? `Mouvement concurrent.\nSignal : ${data.signal}\nContexte : ${data.contexte || "(non renseigné)"}`
-      : `Détournement d'usage.\nUsage prévu : ${data.prevu}\nUsage observé : ${data.observe}\nContexte : ${data.contexte || "(non renseigné)"}`;
+      ? `Mouvement concurrent.\nSignal : ${data.signal}\nContexte : ${data.contexte || "(non renseigné)"}\n${data.fiches}`
+      : `Détournement d'usage.\nUsage prévu : ${data.prevu}\nUsage observé : ${data.observe}\nContexte d'utilisation : ${data.contexte || "(non renseigné)"}\n${data.fiches}`;
+    const answers = data.answers.length ? `\nRéponses du PM aux questions :\n${data.answers.map((x) => `- ${x.q} → ${x.a || "(passée, sans réponse)"}`).join("\n")}` : "";
     const reading = data.reading.map((r) => `- [${r.status}] ${r.text}`).join("\n");
     const critList = data.criteria.map((c) => `${c.id} (${c.name})`).join(", ");
     const critJson = `"criteria":[{"id":"...","value":entier ${scale},"why":"justification courte"}]${conc ? "" : ',"blocking":true si un risque de sécurité, données personnelles ou légal est avéré, sinon false'}`;
     let prompt: string;
-    if (data.task === "lecture") {
-      prompt = `${ctx}\n\nProduis une lecture de la situation. Ne reprends pas le texte, classe les éléments. N'invente rien : ce qui n'est pas dit va dans "ignore".\nJSON : {"summary":"2 phrases","items":[{"label":"thème court","status":"sait|suppose|ignore","text":"...","source":"d'où vient l'élément","quote":"extrait exact de la saisie ou vide"}],${critJson}}\n6 à 9 items. Critères : ${critList}.`;
+    const extra = conc
+      ? `,"scenarios":[{"name":"Minimal|Probable|Ambitieux","proof":"rapportée|spéculative|établie","title":"ce que prépare le concurrent","desc":"...","gains":["Upsell|New business|Rétention"],"facts":["fait du contexte qui soutient l'hypothèse"],"note":"si aucun fait ne l'étaie, dis-le, sinon vide"}]` + " (exactement 3 scénarios : Minimal, Probable, Ambitieux)"
+      : `,"manques":[{"proof":"rapportée|spéculative","title":"manque du produit que compense ce détournement","appui":"élément du contexte qui l'appuie"}],"po":{"label":"plutôt une opportunité|plutôt un problème","pro":["argument pour l'opportunité"],"con":["argument pour le problème"]}` + " (2 à 3 manques)";
+    if (data.task === "questions") {
+      prompt = `${ctx}\n\nAvant d'analyser, pose 3 ou 4 questions de clarification au PM, sur ce qui manque le plus pour juger (sources, volume, clients, calendrier, données). Courtes, une information par question.\nJSON : {"questions":[{"text":"question ?","why":"ce que la réponse permet de juger, en quelques mots"}]}`;
+    } else if (data.task === "lecture") {
+      prompt = `${ctx}${answers}\n\nProduis une lecture de la situation. Ne reprends pas le texte, classe les éléments. N'invente rien : ce qui n'est pas dit va dans "ignore", avec dans "source" pourquoi c'est important. Une question passée devient un élément "ignore".\nJSON : {"summary":"2 phrases","items":[{"label":"thème court","status":"sait|suppose|ignore","text":"...","source":"source pour sait, justification pour suppose, pourquoi c'est important pour ignore","quote":"extrait exact de la saisie ou de la réponse, sinon vide"}],${critJson}${extra}}\n6 à 10 items. Critères : ${critList}.`;
     } else if (data.task === "enjeu") {
-      prompt = `${ctx}\n\nLecture validée par le PM :\n${reading}\n\nÉvalue l'enjeu. JSON : {${critJson}}. Critères : ${critList}.`;
+      prompt = `${ctx}${answers}\n\nLecture validée par le PM :\n${reading}\n\nÉvalue l'enjeu. JSON : {${critJson}}. Critères : ${critList}.`;
     } else {
-      prompt = `${ctx}\n\nLecture validée :\n${reading}\nCritères retenus : ${data.scores.map((s) => `${s.name}=${s.value}`).join(", ")}\n\nPour chaque option (${data.options.join(", ")}), écris exactement une objection sévère par rôle (${data.roles.join(", ")}), à la première personne du rôle. Il faut donc ${data.options.length * data.roles.length} objections au total, une pour chaque couple : ${data.options.flatMap((o) => data.roles.map((r) => `${o}/${r}`)).join(", ")}. Statut : "etayee" si elle s'appuie sur un élément « sait », "reformulee" si tu as dû corriger une formulation initiale non soutenue par les faits (donne "initial"), "non" sinon.\nJSON : {"objections":[{"option":"...","role":"...","text":"...","support":"etayee|reformulee|non","initial":"","premises":[{"status":"sait|suppose|ignore","text":"...","src":"..."}]}]}`;
+      prompt = `${ctx}${answers}\n\nLecture validée :\n${reading}\nCritères retenus : ${data.scores.map((s) => `${s.name}=${s.value}`).join(", ")}\n\nPour chaque option (${data.options.join(", ")}), écris exactement une objection sévère par rôle (${data.roles.join(", ")}), à la première personne du rôle. Il faut donc ${data.options.length * data.roles.length} objections au total, une pour chaque couple : ${data.options.flatMap((o) => data.roles.map((r) => `${o}/${r}`)).join(", ")}. Statut : "etayee" si elle s'appuie sur un élément « sait », "reformulee" si tu as dû corriger une formulation initiale non soutenue par les faits (donne "initial"), "non" sinon.\nJSON : {"objections":[{"option":"...","role":"...","text":"...","support":"etayee|reformulee|non","initial":"","premises":[{"status":"sait|suppose|ignore","text":"...","src":"..."}]}]}`;
     }
     try {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
