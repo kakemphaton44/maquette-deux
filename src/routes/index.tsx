@@ -86,20 +86,6 @@ function Home() {
           </div>
         </section>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          {(Object.keys(KIND) as Kind[]).map((k) => (
-            <button key={k} type="button" onClick={() => { setKind(k); start(k); }} className="text-left">
-              <Card className={cn("h-full border-2 transition hover:-translate-y-1 hover:border-primary", kind === k && "border-primary")}>
-                <Pill>{KIND[k].code}</Pill>
-                <h2 className="mt-3 text-3xl text-primary">{KIND[k].name}</h2>
-                <p className="mt-2 text-muted-foreground">{KIND[k].intro}</p>
-                <p className="mt-4 text-sm font-bold text-accent">Décisions possibles : {KIND[k].decisions.join(" · ")}</p>
-                <p className="mt-4 font-bold text-primary">Nouvelle analyse →</p>
-              </Card>
-            </button>
-          ))}
-        </div>
-
         <Card>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
