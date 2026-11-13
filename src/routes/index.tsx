@@ -56,7 +56,7 @@ function Home() {
                 <span className="text-sm font-bold">Votre nom pour cette séance</span>
                 <input id="cf-name" className={inputCls + " text-foreground"} value={name} placeholder="Prénom ou initiales" onChange={(e) => { setUserName(e.target.value); if (e.target.value.trim()) setErr((x) => x.filter((m) => m !== "nom")); }} />
                 {err.includes("nom") && <span className="block text-sm font-bold text-highlight">Indiquez un nom pour identifier l’auteur de l’analyse.</span>}
-                <span className="block text-xs text-primary-foreground/70">Aucun compte, aucune connexion. Le nom reste dans votre navigateur, apparaît dans la synthèse et n’est jamais transmis à l’IA.</span>
+                <span className="block text-xs text-primary-foreground/70">Le nom reste dans votre navigateur et apparaît dans la synthèse.</span>
               </label>
               <div className="space-y-2">
                 <span className="block text-sm font-bold">Type de situation</span>
