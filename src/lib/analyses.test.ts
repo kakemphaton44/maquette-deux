@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -78,5 +78,20 @@ describe("statut (parcours en six étapes)", () => {
   });
   it("évaluation périmée → bloquée", () => {
     expect(status({ ...base(), step: 2, staleEnjeu: true })).toBe("bloquee");
+  });
+});
+
+describe("lancement d’une analyse", () => {
+  it("réclame un nom et un type de situation", () => {
+    expect(launchMissing("", null)).toEqual(["nom", "situation"]);
+  });
+  it("un nom seul laisse la situation à choisir", () => {
+    expect(launchMissing("Camille", null)).toEqual(["situation"]);
+  });
+  it("un type seul laisse le nom à saisir", () => {
+    expect(launchMissing("   ", "concurrent")).toEqual(["nom"]);
+  });
+  it("les deux choisies, rien ne manque", () => {
+    expect(launchMissing("Camille", "detournement")).toEqual([]);
   });
 });

@@ -117,6 +117,14 @@ export const KIND: Record<Kind, { code: string; name: string; intro: string; opt
   },
 };
 
+/** Un nom et un type de situation se choisissent ensemble, avant de lancer l’analyse. */
+export function launchMissing(name: string, kind: Kind | null): ("nom" | "situation")[] {
+  const missing: ("nom" | "situation")[] = [];
+  if (!name.trim()) missing.push("nom");
+  if (!kind) missing.push("situation");
+  return missing;
+}
+
 /** Critères proposés par l'IA. Concurrent : échelle 1 à 3 ; détournement : 1 à 5. */
 export const CRITERIA: Record<Kind, { id: string; name: string; cat?: Criterion["cat"] }[]> = {
   concurrent: [

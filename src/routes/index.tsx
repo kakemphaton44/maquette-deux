@@ -2,8 +2,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Download, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { AppHeader, Btn, Card, Pill, inputCls } from "@/components/cf/ui";
-import { KIND, STATUS, STEPS, newAnalysis, reviewStats, status, titleOf, type Analysis, type Kind } from "@/lib/analyses";
+import { KIND, STATUS, STEPS, launchMissing, newAnalysis, reviewStats, status, titleOf, type Analysis, type Kind } from "@/lib/analyses";
 import { deleteAnalysis, exportAll, importAll, saveAnalysis, setUserName, useAnalyses, useUserName } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,10 +27,16 @@ function Home() {
   const name = useUserName();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [nameErr, setNameErr] = useState(false);
-  const start = (kind: Kind) => {
-    if (!name.trim()) { setNameErr(true); document.getElementById("cf-name")?.focus(); return; }
-    const a = newAnalysis(kind, crypto.randomUUID(), new Date());
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [err, setErr] = useState<("nom" | "situation")[]>([]);
+  const start = (k: Kind | null) => {
+    const missing = launchMissing(name, k);
+    if (missing.length) {
+      setErr(missing);
+      if (missing.includes("nom")) document.getElementById("cf-name")?.focus();
+      return;
+    }
+    const a = newAnalysis(k!, crypto.randomUUID(), new Date());
     saveAnalysis(a);
     navigate({ to: "/analyse/$id", params: { id: a.id } });
   };
@@ -44,12 +51,27 @@ function Home() {
             <p className="text-xs font-bold uppercase tracking-wider text-highlight">Aide à la décision · Product Managers SaaS B2B</p>
             <h1 className="text-7xl leading-[1.05]">Contre<em className="text-highlight">–</em>feu</h1>
             <p className="max-w-xl text-lg text-primary-foreground/80">Contre-feu lit la situation, propose une tendance argumentée, puis fait attaquer chaque option, avant que vous ne décidiez.</p>
-            <label className="block max-w-sm space-y-1">
-              <span className="text-sm font-bold">Votre nom pour cette séance</span>
-              <input id="cf-name" className={inputCls + " text-foreground"} value={name} placeholder="Prénom ou initiales" onChange={(e) => { setUserName(e.target.value); setNameErr(false); }} />
-              {nameErr && <span className="block text-sm font-bold text-highlight">Indiquez un nom pour identifier l’auteur de l’analyse.</span>}
-              <span className="block text-xs text-primary-foreground/70">Aucun compte, aucune connexion. Le nom reste dans votre navigateur, apparaît dans la synthèse et n’est jamais transmis à l’IA.</span>
-            </label>
+            <div className="max-w-lg space-y-4">
+              <label className="block space-y-1">
+                <span className="text-sm font-bold">Votre nom pour cette séance</span>
+                <input id="cf-name" className={inputCls + " text-foreground"} value={name} placeholder="Prénom ou initiales" onChange={(e) => { setUserName(e.target.value); if (e.target.value.trim()) setErr((x) => x.filter((m) => m !== "nom")); }} />
+                {err.includes("nom") && <span className="block text-sm font-bold text-highlight">Indiquez un nom pour identifier l’auteur de l’analyse.</span>}
+                <span className="block text-xs text-primary-foreground/70">Aucun compte, aucune connexion. Le nom reste dans votre navigateur, apparaît dans la synthèse et n’est jamais transmis à l’IA.</span>
+              </label>
+              <div className="space-y-2">
+                <span className="block text-sm font-bold">Type de situation</span>
+                <div role="group" aria-label="Type de situation" className="flex flex-wrap gap-2">
+                  {(Object.keys(KIND) as Kind[]).map((k) => (
+                    <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setErr((x) => x.filter((m) => m !== "situation")); }}
+                      className={cn("min-h-11 rounded-full px-5 text-[15px] font-bold transition-colors", kind === k ? "bg-highlight text-primary" : "border-2 border-primary-foreground/25 text-primary-foreground/85 hover:border-primary-foreground/50 hover:text-primary-foreground")}>
+                      {KIND[k].name}
+                    </button>
+                  ))}
+                </div>
+                {err.includes("situation") && <span className="block text-sm font-bold text-highlight">Choisissez le type de situation.</span>}
+              </div>
+              <Btn variant="accent" onClick={() => start(kind)}>Lancer l’analyse →</Btn>
+            </div>
           </div>
           <div className="space-y-4">
             {resume && (
@@ -66,8 +88,8 @@ function Home() {
 
         <div className="grid gap-5 md:grid-cols-2">
           {(Object.keys(KIND) as Kind[]).map((k) => (
-            <button key={k} type="button" onClick={() => start(k)} className="text-left">
-              <Card className="h-full border-2 transition hover:-translate-y-1 hover:border-primary">
+            <button key={k} type="button" onClick={() => { setKind(k); start(k); }} className="text-left">
+              <Card className={cn("h-full border-2 transition hover:-translate-y-1 hover:border-primary", kind === k && "border-primary")}>
                 <Pill>{KIND[k].code}</Pill>
                 <h2 className="mt-3 text-3xl text-primary">{KIND[k].name}</h2>
                 <p className="mt-2 text-muted-foreground">{KIND[k].intro}</p>
