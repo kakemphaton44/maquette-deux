@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Download, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import { AppHeader, Btn, Card, Pill, inputCls } from "@/components/cf/ui";
-import { KIND, STATUS, STEPS, launchMissing, newAnalysis, reviewStats, status, titleOf, type Analysis, type Kind } from "@/lib/analyses";
+import { AppHeader, Btn, Card, Chip, Pill, inputCls } from "@/components/cf/ui";
+import { KIND, NO_FILTER, STATUS, STEPS, filterAnalyses, launchMissing, newAnalysis, reviewStats, status, titleOf, type Analysis, type AnalysisFilter, type Kind, type Status } from "@/lib/analyses";
 import { deleteAnalysis, exportAll, importAll, saveAnalysis, setUserName, useAnalyses, useUserName } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,8 @@ export const Route = createFileRoute("/")({
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
+const toneOf = (s: Status) => (s === "evaluee" ? "success" : s === "bloquee" ? "accent" : "muted");
+
 function Home() {
   const list = useAnalyses();
   const name = useUserName();
@@ -29,6 +31,7 @@ function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<Kind | null>(null);
   const [err, setErr] = useState<("nom" | "situation")[]>([]);
+  const [f, setF] = useState<AnalysisFilter>(NO_FILTER);
   const start = (k: Kind | null) => {
     const missing = launchMissing(name, k);
     if (missing.length) {
@@ -42,14 +45,16 @@ function Home() {
   };
   const resume = list?.find((a) => ["en_cours", "eval_incomplete", "bloquee"].includes(status(a)));
   const bilan = list ? reviewStats(list) : null;
+  const shown = list ? filterAnalyses(list, f) : null;
+  const filtered = f.q.trim() !== "" || f.kind !== "tous" || f.status !== "tous";
   return (
     <div className="min-h-screen">
       <AppHeader />
-      <main className="w-full space-y-8 px-6 lg:px-10 py-10">
-        <section className="grid gap-8 rounded-[2rem] bg-primary p-10 text-primary-foreground md:grid-cols-[1.4fr_1fr]">
+      <main className="w-full space-y-8 px-4 py-6 sm:px-6 sm:py-10 lg:px-10">
+        <section className="grid gap-6 rounded-[2rem] bg-primary p-5 text-primary-foreground sm:gap-8 sm:rounded-[2rem] sm:p-10 md:grid-cols-[1.4fr_1fr]">
           <div className="space-y-5">
             <p className="text-xs font-bold uppercase tracking-wider text-highlight">Aide à la décision · Product Managers SaaS B2B</p>
-            <h1 className="text-7xl leading-[1.05]">Contre<em className="text-highlight">–</em>feu</h1>
+            <h1 className="text-5xl leading-[1.05] sm:text-7xl">Contre<em className="text-highlight">–</em>feu</h1>
             <p className="max-w-xl text-lg text-primary-foreground/80">Contre-feu lit la situation, propose une tendance argumentée, puis fait attaquer chaque option, avant que vous ne décidiez.</p>
             <div className="max-w-lg space-y-4">
               <label className="block space-y-1">
@@ -87,16 +92,16 @@ function Home() {
         </section>
 
         <Card>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+            <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-accent">Historique</p>
-              <h2 className="text-3xl text-primary">Mes analyses <span className="font-mono text-xl text-muted-foreground">{list?.length ?? ""}</span></h2>
+              <h2 className="text-2xl text-primary sm:text-3xl">Mes analyses <span className="font-mono text-xl text-muted-foreground">{list?.length ?? ""}</span></h2>
               <p className="max-w-2xl text-sm text-muted-foreground">Retrouvez vos analyses et reprenez un travail interrompu. Une analyse terminée ou abandonnée s’ouvre en consultation seule : son contenu ne peut plus être modifié.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2">
               <Btn variant="outline" onClick={() => { const url = URL.createObjectURL(new Blob([exportAll()], { type: "application/json" })); const l = document.createElement("a"); l.href = url; l.download = "contre-feu-analyses.json"; l.click(); URL.revokeObjectURL(url); }}><Download className="h-4 w-4" /> Exporter</Btn>
               <Btn variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" /> Importer</Btn>
-              <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { importAll(await f.text()); } catch { window.alert("Ce fichier n’est pas un export Contre-feu."); } e.target.value = ""; }} />
+              <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={async (e) => { const f2 = e.target.files?.[0]; if (!f2) return; try { importAll(await f2.text()); } catch { window.alert("Ce fichier n’est pas un export Contre-feu."); } e.target.value = ""; }} />
             </div>
           </div>
 
@@ -108,18 +113,49 @@ function Home() {
             </div>
           )}
 
+          {list && list.length > 0 && (
+            <div className="mt-6 space-y-3">
+              <label className="block max-w-md space-y-1">
+                <span className="text-sm font-bold">Rechercher</span>
+                <input className={inputCls} value={f.q} placeholder="Titre, signal, décision…" onChange={(e) => setF({ ...f, q: e.target.value })} />
+              </label>
+              <div role="group" aria-label="Filtrer par type de situation" className="flex flex-wrap gap-2">
+                <Chip on={f.kind === "tous"} onClick={() => setF({ ...f, kind: "tous" })}>Tous les types</Chip>
+                {(Object.keys(KIND) as Kind[]).map((k) => <Chip key={k} on={f.kind === k} onClick={() => setF({ ...f, kind: k })}>{KIND[k].name}</Chip>)}
+              </div>
+              <div role="group" aria-label="Filtrer par statut" className="flex flex-wrap gap-2">
+                <Chip on={f.status === "tous"} onClick={() => setF({ ...f, status: "tous" })}>Tous les statuts</Chip>
+                {(Object.keys(STATUS) as Status[]).map((s) => <Chip key={s} on={f.status === s} onClick={() => setF({ ...f, status: s })}>{STATUS[s].glyph} {STATUS[s].label}</Chip>)}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {shown?.length ?? 0} analyse{(shown?.length ?? 0) > 1 ? "s" : ""} affichée{(shown?.length ?? 0) > 1 ? "s" : ""} sur {list.length}
+                {filtered && <button type="button" onClick={() => setF(NO_FILTER)} className="ml-3 font-bold text-accent">Réinitialiser</button>}
+              </p>
+            </div>
+          )}
+
           {list && list.length === 0 ? (
-            <div className="mt-8 rounded-3xl border-2 border-dashed border-input p-10 text-center">
+            <div className="mt-8 rounded-3xl border-2 border-dashed border-input p-6 text-center sm:p-10">
               <p className="font-display text-2xl text-primary">Aucune analyse pour l’instant</p>
               <p className="mt-2 text-muted-foreground">Quand un signal arrive — une bêta chez un concurrent, un usage inattendu de votre produit — lancez une analyse.</p>
             </div>
-          ) : (
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="py-2 pr-4">Analyse</th><th className="pr-4">Situation</th><th className="pr-4">Statut</th><th className="pr-4">Créée le</th><th className="pr-4">Modifiée le</th><th className="pr-4">Action</th><th /></tr></thead>
-                <tbody>{list?.map((a) => <Row key={a.id} a={a} />)}</tbody>
-              </table>
+          ) : shown && shown.length === 0 ? (
+            <div className="mt-8 rounded-3xl border-2 border-dashed border-input p-6 text-center sm:p-10">
+              <p className="font-display text-2xl text-primary">Aucune analyse ne correspond</p>
+              <p className="mt-2 text-muted-foreground">Changez de mot ou retirez un filtre.</p>
             </div>
+          ) : (
+            <>
+              <div className="mt-6 hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="py-2 pr-4">Analyse</th><th className="pr-4">Situation</th><th className="pr-4">Statut</th><th className="pr-4">Créée le</th><th className="pr-4">Modifiée le</th><th className="pr-4">Action</th><th /></tr></thead>
+                  <tbody>{shown?.map((a) => <Row key={a.id} a={a} />)}</tbody>
+                </table>
+              </div>
+              <div className="mt-6 space-y-3 md:hidden">
+                {shown?.map((a) => <MobileRow key={a.id} a={a} />)}
+              </div>
+            </>
           )}
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">{Object.values(STATUS).map((s) => <span key={s.label}><strong>{s.glyph} {s.label}</strong> : {s.def}</span>)}</div>
         </Card>
@@ -128,21 +164,43 @@ function Home() {
   );
 }
 
-function Row({ a }: { a: Analysis }) {
+function Actions({ a }: { a: Analysis }) {
   const s = status(a);
   const done = s === "evaluee" || s === "abandonnee";
+  return (
+    <>
+      {s === "evaluee" ? <Link to="/synthese/$id" params={{ id: a.id }} className="font-bold text-accent">Consulter</Link> : <Link to="/analyse/$id" params={{ id: a.id }} className="font-bold text-accent">{done ? "Consulter" : s === "bloquee" ? "Relancer" : "Reprendre"}</Link>}
+      {s === "evaluee" && <Link to="/revue/$id" params={{ id: a.id }} className="font-bold text-accent">{a.review ? "Revoir la revue" : "Faire la revue"}</Link>}
+    </>
+  );
+}
+
+function Row({ a }: { a: Analysis }) {
+  const s = status(a);
   return (
     <tr className="border-t border-border">
       <td className="py-3 pr-4 font-bold">{titleOf(a)}</td>
       <td className="pr-4">{KIND[a.kind].name}</td>
-      <td className="pr-4"><Pill tone={s === "evaluee" ? "success" : s === "bloquee" ? "accent" : "muted"}>{STATUS[s].glyph} {STATUS[s].label}</Pill></td>
+      <td className="pr-4"><Pill tone={toneOf(s)}>{STATUS[s].glyph} {STATUS[s].label}</Pill></td>
       <td className="pr-4">{fmt(a.createdAt)}</td>
       <td className="pr-4">{fmt(a.updatedAt)}</td>
-      <td className="space-x-3 pr-4">
-        {s === "evaluee" ? <Link to="/synthese/$id" params={{ id: a.id }} className="font-bold text-accent">Consulter</Link> : <Link to="/analyse/$id" params={{ id: a.id }} className="font-bold text-accent">{done ? "Consulter" : s === "bloquee" ? "Relancer" : "Reprendre"}</Link>}
-        {s === "evaluee" && <Link to="/revue/$id" params={{ id: a.id }} className="font-bold text-accent">{a.review ? "Revoir la revue" : "Faire la revue"}</Link>}
-      </td>
+      <td className="space-x-3 pr-4"><Actions a={a} /></td>
       <td><button type="button" aria-label="Supprimer l’analyse" className="rounded-full p-2 text-muted-foreground hover:bg-muted" onClick={() => { if (window.confirm(`Supprimer « ${titleOf(a)} » ?`)) deleteAnalysis(a.id); }}><Trash2 className="h-4 w-4" /></button></td>
     </tr>
+  );
+}
+
+function MobileRow({ a }: { a: Analysis }) {
+  const s = status(a);
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="min-w-0 break-words font-bold">{titleOf(a)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{KIND[a.kind].name} · créée le {fmt(a.createdAt)} · modifiée le {fmt(a.updatedAt)}</p>
+      <div className="mt-2"><Pill tone={toneOf(s)}>{STATUS[s].glyph} {STATUS[s].label}</Pill></div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <Actions a={a} />
+        <button type="button" className="font-bold text-muted-foreground" onClick={() => { if (window.confirm(`Supprimer « ${titleOf(a)} » ?`)) deleteAnalysis(a.id); }}>Supprimer</button>
+      </div>
+    </div>
   );
 }

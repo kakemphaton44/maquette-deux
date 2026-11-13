@@ -6,11 +6,11 @@ import { setUserName, useUserName } from "@/lib/store";
 
 export function Logo() {
   return (
-    <Link to="/" className="flex items-center gap-2.5 text-primary-foreground no-underline">
-      <span className="relative inline-block h-8 w-8 overflow-hidden rounded-full bg-accent">
+    <Link to="/" className="flex shrink-0 items-center gap-2.5 text-primary-foreground no-underline">
+      <span className="relative inline-block h-7 w-7 shrink-0 overflow-hidden rounded-full bg-accent sm:h-8 sm:w-8">
         <span className="absolute left-1/2 top-[-20%] h-[140%] w-1.5 -translate-x-1/2 rotate-45 bg-highlight" />
       </span>
-      <span className="font-display text-2xl">
+      <span className="font-display text-xl sm:text-2xl">
         contre<span className="text-accent">–</span>feu
       </span>
     </Link>
@@ -22,9 +22,9 @@ export function AppHeader() {
   const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
     <header className="no-print sticky top-0 z-20 bg-primary text-primary-foreground">
-      <div className="flex h-16 w-full items-center gap-8 px-6 lg:px-10">
+      <div className="flex min-h-16 w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 sm:h-16 sm:flex-nowrap sm:gap-8 sm:px-6 lg:px-10">
         <Logo />
-        <nav className="flex gap-6 text-[15px]">
+        <nav className="order-3 flex w-full gap-4 text-sm sm:order-none sm:w-auto sm:gap-6 sm:text-[15px]">
           <Link to="/" className="text-primary-foreground/80 no-underline hover:text-primary-foreground" activeProps={{ className: "!text-primary-foreground font-semibold" }} activeOptions={{ exact: true }}>
             Mes analyses
           </Link>
@@ -39,7 +39,7 @@ export function AppHeader() {
             if (n !== null) setUserName(n.trim());
           }}
           title={name || "Indiquer votre nom"}
-          className="ml-auto flex h-10 w-10 items-center justify-center rounded-full bg-success-soft text-sm font-bold text-success"
+          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success-soft text-sm font-bold text-success sm:h-10 sm:w-10"
         >
           {initials || "?"}
         </button>

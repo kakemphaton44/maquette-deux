@@ -196,13 +196,13 @@ export function newAnalysis(kind: Kind, id: string, now: Date): Analysis {
 
 /** Complète les analyses enregistrées avec une version antérieure. */
 export function normalize(a: Analysis): Analysis {
-  return { ...a, fiches: a.fiches ?? {}, questions: a.questions ?? [], questionsDone: a.questionsDone ?? !!a.launched, scenarios: a.scenarios ?? [], manques: a.manques ?? [] };
+  return { ...a, title: a.title ?? "", signal: a.signal ?? "", observe: a.observe ?? "", prevu: a.prevu ?? "", contexte: a.contexte ?? "", summary: a.summary ?? "", risks: a.risks ?? [], fiches: a.fiches ?? {}, questions: a.questions ?? [], questionsDone: a.questionsDone ?? !!a.launched, scenarios: a.scenarios ?? [], manques: a.manques ?? [] };
 }
 
 export const filled = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
 export const titleOf = (a: Analysis) => {
-  if (a.title.trim()) return a.title.trim();
-  const src = (a.kind === "concurrent" ? a.signal : a.observe || a.prevu).trim();
+  if ((a.title ?? "").trim()) return a.title.trim();
+  const src = (a.kind === "concurrent" ? a.signal ?? "" : (a.observe ?? "") || (a.prevu ?? "")).trim();
   if (!src) return "Analyse sans titre";
   return src.length > 64 ? src.slice(0, 61).trim() + "…" : src;
 };
@@ -324,6 +324,24 @@ export const STATUS: Record<Status, { label: string; glyph: string; def: string 
   evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultation seule." },
   abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous ; consultation seule, sans issue." },
 };
+
+/** Recherche et filtres de l'historique. "tous" laisse le critère ouvert. */
+export interface AnalysisFilter { q: string; kind: Kind | "tous"; status: Status | "tous" }
+export const NO_FILTER: AnalysisFilter = { q: "", kind: "tous", status: "tous" };
+
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** Les analyses qui correspondent à la recherche (sans accents) et aux filtres type / statut. */
+export function filterAnalyses(list: Analysis[], f: AnalysisFilter): Analysis[] {
+  const words = fold(f.q).split(/\s+/).filter(Boolean);
+  return list.filter((a) => {
+    if (f.kind !== "tous" && a.kind !== f.kind) return false;
+    if (f.status !== "tous" && status(a) !== f.status) return false;
+    if (!words.length) return true;
+    const hay = fold([titleOf(a), KIND[a.kind].name, a.signal, a.observe, a.contexte, a.summary ?? "", a.decision ?? "", ...(a.risks ?? [])].join(" "));
+    return words.every((w) => hay.includes(w));
+  });
+}
 
 /** Bilan des revues pour l'accueil. */
 export function reviewStats(list: Analysis[]) {

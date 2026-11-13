@@ -31,3 +31,4 @@ use the editor.
 
 
 - Contre-feu keeps analyses in the browser (src/lib/store.ts) and its business rules as pure tested functions in src/lib/analyses.ts; the only server code is src/lib/ai.functions.ts calling OpenAI with OPENAI_API_KEY (the starting position is never sent). Why: rules stay testable, storage swappable, secrets server-side.
+- Every page must stay usable at 360 px wide: no horizontal overflow, and lists render as stacked cards below `md:` instead of a table. Why: the app is read on a phone as often as on a desktop.

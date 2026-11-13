@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, NO_FILTER, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -93,5 +93,29 @@ describe("lancement d’une analyse", () => {
   });
   it("les deux choisies, rien ne manque", () => {
     expect(launchMissing("Camille", "detournement")).toEqual([]);
+  });
+});
+
+describe("recherche et filtres de l'historique", () => {
+  const a1: Analysis = { ...newAnalysis("concurrent", "1", new Date("2026-01-01")), signal: "Bêta publique chez un concurrent" };
+  const a2: Analysis = { ...newAnalysis("detournement", "2", new Date("2026-01-02")), observe: "Détournement de notre éditeur par un client" };
+  const ids = (l: Analysis[]) => l.map((a) => a.id);
+  it("sans filtre, les deux sont affichées", () => {
+    expect(ids(filterAnalyses([a1, a2], NO_FILTER))).toEqual(["1", "2"]);
+  });
+  it("la recherche ignore les accents", () => {
+    expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, q: "detournement" }))).toEqual(["2"]);
+    expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, q: "Détournement" }))).toEqual(["2"]);
+  });
+  it("le filtre par type ne garde que ce type", () => {
+    expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, kind: "concurrent" }))).toEqual(["1"]);
+  });
+  it("le filtre par statut ne garde que ce statut", () => {
+    expect(filterAnalyses([a1, a2], { ...NO_FILTER, status: "en_cours" }).length).toBe(2);
+    expect(filterAnalyses([a1, a2], { ...NO_FILTER, status: "evaluee" }).length).toBe(0);
+  });
+  it("tous les mots doivent se trouver", () => {
+    expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent beta" }))).toEqual(["1"]);
+    expect(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent editeur" }).length).toBe(0);
   });
 });
