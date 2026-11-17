@@ -61,7 +61,6 @@ export interface Analysis {
   position: string;
   positionWhy: string;
   risks: string[];
-  anonymised: boolean;
   launched: boolean;
   fiches: Record<string, string>;
   questions: Question[];
@@ -188,7 +187,7 @@ export const CONF = ["faible", "moyenne", "élevée"] as const;
 export function newAnalysis(kind: Kind, id: string, now: Date): Analysis {
   const iso = now.toISOString();
   return {
-    id, kind, title: "", signal: "", prevu: "", observe: "", contexte: "", position: "", positionWhy: "", risks: [""], anonymised: false,
+    id, kind, title: "", signal: "", prevu: "", observe: "", contexte: "", position: "", positionWhy: "", risks: [""],
     launched: false, fiches: {}, questions: [], questionsDone: false, scenarios: [], manques: [], step: 0, summary: "", reading: [], criteria: [], blocking: false, staleEnjeu: false, staleObjections: false,
     objections: [], corrections: [], decisionWhy: "", reviewDate: "", trigger: "", measure: "", abandoned: false, createdAt: iso, updatedAt: iso,
   };
@@ -217,7 +216,6 @@ export function describeErrors(a: Analysis): string[] {
     if (!a.observe.trim()) e.push("Décrivez l’usage observé.");
   }
   if (!a.position) e.push("Choisissez votre position de départ.");
-  if (!a.anonymised) e.push("Confirmez l’anonymisation des informations saisies.");
   return e;
 }
 

@@ -326,10 +326,6 @@ function Describe({ a, up, tried, locked }: { a: Analysis; up: Up; tried: boolea
           )}
           <Field group label="Risques déjà identifiés · facultatif" hint="Ce que vous craignez déjà. Ils seront rappelés dans la synthèse finale."><ListEditor items={a.risks} onChange={(risks) => up({ risks })} placeholder="Ex. « Réaction des clients grands comptes. »" /></Field>
         </Card>
-        <Card className="space-y-3 bg-secondary">
-          <p className="text-sm">Le signal, les fiches de contexte et vos réponses aux questions seront transmis à un service d’IA externe (OpenAI). Retirez les noms de clients, de personnes, les coordonnées et toute donnée personnelle : Contre-feu ne les anonymise pas à votre place.</p>
-          <label className="flex items-center gap-3 font-bold"><input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={a.anonymised} onChange={(e) => up({ anonymised: e.target.checked })} /> J’ai anonymisé les informations saisies</label>
-        </Card>
       </fieldset>
     </>
   );
