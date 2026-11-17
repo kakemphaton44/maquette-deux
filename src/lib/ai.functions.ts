@@ -21,8 +21,8 @@ const Input = z.object({
 export const runAI = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
-    const key = process.env["OPENAI_API_KEY"];
-    if (!key) return { result: "", error: "Clé OpenAI absente." };
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) return { result: "", error: "Clé IA absente." };
     const conc = data.kind === "concurrent";
     const scale = conc ? "1 (faible) à 3 (fort)" : "1 (faible) à 5 (fort)";
     const ctx = conc
@@ -46,11 +46,11 @@ export const runAI = createServerFn({ method: "POST" })
       prompt = `${ctx}${answers}\n\nLecture validée :\n${reading}\nCritères retenus : ${data.scores.map((s) => `${s.name}=${s.value}`).join(", ")}\n\nPour chaque option (${data.options.join(", ")}), écris exactement une objection sévère par rôle (${data.roles.join(", ")}), à la première personne du rôle. Il faut donc ${data.options.length * data.roles.length} objections au total, une pour chaque couple : ${data.options.flatMap((o) => data.roles.map((r) => `${o}/${r}`)).join(", ")}. Statut : "etayee" si elle s'appuie sur un élément « sait », "reformulee" si tu as dû corriger une formulation initiale non soutenue par les faits (donne "initial"), "non" sinon.\nJSON : {"objections":[{"option":"...","role":"...","text":"...","support":"etayee|reformulee|non","initial":"","premises":[{"status":"sait|suppose|ignore","text":"...","src":"..."}]}]}`;
     }
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        headers: { "Lovable-API-Key": key, "Content-Type": "application/json", "X-Lovable-AIG-SDK": "fetch" },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "openai/gpt-6-luna",
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: "Tu es Contre-feu, une aide à la décision pour Product Managers SaaS B2B. Tu réponds en français, en JSON strict. Tu ne décides jamais à la place du PM." },
@@ -59,8 +59,8 @@ export const runAI = createServerFn({ method: "POST" })
         }),
       });
       if (!r.ok) {
-        console.error("OpenAI", r.status, await r.text());
-        return { result: "", error: r.status === 401 ? "La clé OpenAI est refusée." : r.status === 429 ? "Limite OpenAI atteinte, réessayez plus tard." : "Le service IA n’a pas répondu." };
+        console.error("AI gateway", r.status, await r.text());
+        return { result: "", error: r.status === 401 ? "La clé IA est refusée." : r.status === 429 ? "Limite IA atteinte, réessayez plus tard." : "Le service IA n’a pas répondu." };
       }
       const j = await r.json();
       return { result: String(j.choices?.[0]?.message?.content ?? ""), error: "" };
