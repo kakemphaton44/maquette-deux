@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, NO_FILTER, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -93,6 +93,27 @@ describe("lancement d’une analyse", () => {
   });
   it("les deux choisies, rien ne manque", () => {
     expect(launchMissing("Camille", "detournement")).toEqual([]);
+  });
+});
+
+describe("format des champs obligatoires", () => {
+  it("un texte libre doit contenir des lettres", () => {
+    expect(textFormatError("")).toBeNull();
+    expect(textFormatError("12345")).toMatch(/chiffres/);
+    expect(textFormatError("…  !")).toMatch(/mots/);
+    expect(textFormatError("Bêta chez 2 concurrents")).toBeNull();
+  });
+  it("un nom n’a ni chiffres ni symboles", () => {
+    expect(nameFormatError("Camille")).toBeNull();
+    expect(nameFormatError("J.-P. O’Neil")).toBeNull();
+    expect(nameFormatError("Camille2")).toMatch(/chiffres/);
+    expect(nameFormatError("@cam")).toMatch(/lettres/);
+    expect(launchMissing("42", "concurrent")).toEqual(["nom"]);
+  });
+  it("décrire et décider bloquent sur un champ fait de chiffres", () => {
+    const a = { ...newAnalysis("concurrent", "x", new Date()), signal: "123", position: "Surveiller" } as Analysis;
+    expect(describeErrors(a)).toEqual(["Signal concurrent : saisissez du texte, pas uniquement des chiffres."]);
+    expect(decideErrors({ ...a, decision: "Ajuster", trigger: "y", measure: "10" }, "Ajuster")).toHaveLength(1);
   });
 });
 

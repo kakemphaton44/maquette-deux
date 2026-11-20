@@ -1,13 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Lock, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, AlertCircle, Check, Repeat, ChevronLeft, ChevronRight, Lock, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { AppHeader, Btn, Card, Chip, Field, ListEditor, Pill, inputCls } from "@/components/cf/ui";
+import { AppHeader, Btn, Card, Chip, Field, ListEditor, Pill, Required, RequiredLegend, choiceInvalidCls, inputCls } from "@/components/cf/ui";
 import { Missing } from "@/components/cf/Missing";
 import { runAI } from "@/lib/ai.functions";
 import {
   CONF, CRITERIA, DECIDE_STEP, EVAL_STEP, FICHES, KIND, MOTIF_LABEL, NSP, READ_LABEL, STATUS, STEPS, SUPPORT_LABEL,
-  closeErrors, decideErrors, describeErrors, evalStats, ficheKey, ficheText, filled, missingContext, outcome, scaleMax, solidity, status, synthesisText, titleOf, trend,
+  closeErrors, decideErrors, describeErrors, evalStats, ficheKey, ficheText, filled, missingContext, outcome, scaleMax, solidity, status, synthesisText, textFormatError, titleOf, trend,
   type Analysis, type Criterion, type Manque, type Motif, type Objection, type Question, type ReadStatus, type ReadingItem, type Scenario, type Support, type YesNo,
 } from "@/lib/analyses";
 import { getAnalysis, saveAnalysis, useAnalyses, useUserName } from "@/lib/store";
@@ -134,7 +134,7 @@ function Workspace({ a }: { a: Analysis }) {
           <Link to="/" className="text-sm font-bold text-accent no-underline">← Mes analyses</Link>
           <div>
             <h2 className="text-2xl leading-tight text-primary">{titleOf(a)}</h2>
-            <div className="mt-2 flex flex-wrap gap-2"><Pill tone="accent">{STATUS[st].glyph} {STATUS[st].label}</Pill><Pill>{KIND[a.kind].code}</Pill></div>
+            <div className="mt-2 flex flex-wrap gap-2"><KindPill kind={a.kind} /><Pill tone="accent">{STATUS[st].glyph} {STATUS[st].label}</Pill></div>
           </div>
           <nav aria-label="Parcours" className="space-y-1">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Parcours</p>
@@ -202,7 +202,7 @@ function Workspace({ a }: { a: Analysis }) {
               prev={view > 0 ? () => setView(view - 1) : undefined}
               prevLabel={view > 0 ? STEPS[view - 1]!.label : ""}
               primary={
-                view === 0 ? { label: a.launched ? "Continuer" : "Lancer l’analyse", run: () => { if (a.launched) return goStep(1); setTried(true); if (!describeErrors(a).length) ai.questions(a); } }
+                view === 0 ? { label: a.launched ? "Continuer" : "Lancer l’analyse", blocked: !a.launched && describeErrors(a).length > 0, run: () => { if (a.launched) return goStep(1); setTried(true); if (!describeErrors(a).length) ai.questions(a); } }
                 : view === 1 ? (!a.questionsDone
                   ? { label: "Analyser la situation", run: () => {
                       const open = a.questions.filter((q) => !q.skipped && !q.answer.trim()).length;
@@ -212,14 +212,14 @@ function Workspace({ a }: { a: Analysis }) {
                   : { label: "Évaluer l’enjeu", run: () => goStep(2) })
                 : view === 2 ? { label: a.objections.length ? "Continuer" : "Mettre les options à l’épreuve", disabled: a.staleEnjeu, run: async () => { if (!a.objections.length) await ai.objections(a); if (getAnalysis(a.id)?.objections.length) goStep(3); } }
                 : view === 3 ? { label: "Passer à la décision", disabled: a.staleObjections || !a.objections.length, run: () => goStep(4) }
-                : view === 4 ? { label: "Valider la décision", run: () => { setTried(true); if (!decideErrors(a, t?.label ?? null).length) goStep(5); } }
-                : { label: "Clore l’analyse", run: () => {
+                : view === 4 ? { label: "Valider la décision", blocked: decideErrors(a, t?.label ?? null).length > 0, run: () => { setTried(true); if (!decideErrors(a, t?.label ?? null).length) goStep(5); } }
+                : { label: "Clore l’analyse", blocked: closeErrors(a).length > 0, run: () => {
                     setTried(true);
                     if (closeErrors(a).length) return;
                     up({ completedAt: new Date().toISOString() }); navigate({ to: "/synthese/$id", params: { id: a.id } });
                   } }
               }
-              note={view === 1 && !a.questionsDone ? "Répondez ou passez chaque question." : view === 2 && a.staleEnjeu ? "Regénérez l’évaluation pour continuer." : view === 3 && a.staleObjections ? "Regénérez les objections pour continuer." : view === 5 ? "Vous pouvez quitter : l’analyse reste reprenable depuis « Mes analyses »." : ""}
+              note={tried && view === 0 && !a.launched && describeErrors(a).length ? "Complétez les champs marqués * pour lancer l’analyse." : tried && view === 4 && decideErrors(a, t?.label ?? null).length ? "Complétez les champs marqués * pour valider." : tried && view === 5 && closeErrors(a).length ? "Évaluez toutes les objections et répondez aux deux questions pour clore." : view === 1 && !a.questionsDone ? "Répondez ou passez chaque question." : view === 2 && a.staleEnjeu ? "Regénérez l’évaluation pour continuer." : view === 3 && a.staleObjections ? "Regénérez les objections pour continuer." : view === 5 ? "Vous pouvez quitter : l’analyse reste reprenable depuis « Mes analyses »." : ""}
             />
           )}
         </div>
@@ -238,12 +238,12 @@ function Working({ task }: { task: string }) {
   );
 }
 
-function BottomBar({ prev, prevLabel, primary, note }: { prev?: (() => void) | undefined; prevLabel: string; primary: { label: string; run: () => void; disabled?: boolean }; note: string }) {
+function BottomBar({ prev, prevLabel, primary, note }: { prev?: (() => void) | undefined; prevLabel: string; primary: { label: string; run: () => void; disabled?: boolean; blocked?: boolean }; note: string }) {
   return (
     <div className="no-print sticky bottom-4 z-10 flex flex-wrap items-center gap-4 rounded-full border border-border bg-card px-4 py-3 shadow-soft">
       {prev ? <Btn variant="ghost" onClick={prev}><ChevronLeft className="h-4 w-4" /> {prevLabel}</Btn> : <span />}
       <span className="flex-1 text-sm text-muted-foreground">{note}</span>
-      <Btn variant="accent" disabled={primary.disabled} onClick={primary.run}>{primary.label} <ChevronRight className="h-4 w-4" /></Btn>
+      <Btn variant="accent" disabled={primary.disabled} aria-disabled={primary.blocked || undefined} onClick={primary.run}>{primary.label} <ChevronRight className="h-4 w-4" /></Btn>
     </div>
   );
 }
@@ -257,6 +257,16 @@ function Head({ tag, title, lead }: { tag: string; title: ReactNode; lead: strin
     </div>
   );
 }
+/** Raison de l’analyse, bien visible. Couleur neutre de la charte (pas de vert/orange, réservés aux états) ; l’icône distingue le type. */
+function KindPill({ kind, large }: { kind: Analysis["kind"]; large?: boolean }) {
+  const Icon = kind === "concurrent" ? Activity : Repeat;
+  return (
+    <span className={cn("inline-flex w-fit items-center gap-1.5 rounded-full font-bold", "bg-primary text-primary-foreground", large ? "px-4 py-1.5 text-sm" : "px-3 py-1 text-xs")}>
+      <Icon aria-hidden="true" className={large ? "h-4 w-4" : "h-3.5 w-3.5"} />
+      {KIND[kind].name}
+    </span>
+  );
+}
 const AIBadge = () => <Pill tone="primary"><Sparkles className="mr-1 h-3 w-3" /> Analyse de l’IA</Pill>;
 const YouBadge = () => <Pill tone="soft">Votre saisie</Pill>;
 
@@ -266,7 +276,8 @@ function Describe({ a, up, tried, locked }: { a: Analysis; up: Up; tried: boolea
   const errs = tried ? describeErrors(a) : [];
   return (
     <>
-      <Head tag={`Étape 1 sur 6 · ${K.name}`} title={<>Nouvelle <em className="text-accent">analyse</em></>} lead="Décrivez la situation et votre position spontanée. Votre position sera enregistrée puis masquée pendant toute l’analyse : elle ne sera révélée qu’à la synthèse." />
+      <KindPill kind={a.kind} large />
+      <Head tag="Étape 1 sur 6" title={<>Nouvelle <em className="text-accent">analyse</em></>} lead="Décrivez la situation et votre position spontanée. Votre position sera enregistrée puis masquée pendant toute l’analyse : elle ne sera révélée qu’à la synthèse." />
       {locked && <p className="rounded-2xl bg-muted px-5 py-3 text-sm">L’analyse est lancée : la description n’est plus modifiable.</p>}
       {errs.length > 0 && (
         <Card className="border-2 border-destructive/40">
@@ -276,18 +287,19 @@ function Describe({ a, up, tried, locked }: { a: Analysis; up: Up; tried: boolea
       )}
       <fieldset disabled={locked} className="space-y-6">
         <Card className="space-y-6">
-          <div className="flex items-center gap-2"><YouBadge /><span className="text-sm text-muted-foreground">{K.code} · {K.intro}</span></div>
+          <div className="flex flex-wrap items-center gap-2"><YouBadge /><span className="text-sm text-muted-foreground">{K.intro}</span></div>
+          <RequiredLegend />
           <Field label="Titre de l’analyse · facultatif" hint="Sert uniquement à retrouver l’analyse dans « Mes analyses ». Sans titre, Contre-feu reprend le début de votre description.">
             <input className={inputCls} value={a.title} onChange={(e) => up({ title: e.target.value })} />
           </Field>
           {a.kind === "concurrent" ? (
-            <Field label="Signal concurrent · obligatoire" hint="Ce que vous avez appris, et par quelle voie. Écrivez-le tel qu’on vous l’a rapporté, sans l’interpréter.">
+            <Field required show={tried} error={textFormatError(a.signal)} label="Signal concurrent" hint="Ce que vous avez appris, et par quelle voie. Écrivez-le tel qu’on vous l’a rapporté, sans l’interpréter.">
               <textarea rows={4} className={inputCls} value={a.signal} placeholder="Ex. « Un prospect m’a dit que tel concurrent teste en bêta des alertes sur… »" onChange={(e) => up({ signal: e.target.value })} />
             </Field>
           ) : (
             <>
-              <Field label="Usage prévu · obligatoire" hint="Ce pour quoi la fonction a été conçue."><textarea rows={3} className={inputCls} value={a.prevu} placeholder="Ex. « Le module Réserves sert à consigner les réserves jusqu’à leur levée. »" onChange={(e) => up({ prevu: e.target.value })} /></Field>
-              <Field label="Usage observé · obligatoire" hint="Ce que les utilisateurs font réellement, décrit comme vous l’avez constaté."><textarea rows={3} className={inputCls} value={a.observe} placeholder="Ex. « Des conducteurs suivent les livraisons dans le champ commentaire. »" onChange={(e) => up({ observe: e.target.value })} /></Field>
+              <Field required show={tried} error={textFormatError(a.prevu)} label="Usage prévu" hint="Ce pour quoi la fonction a été conçue."><textarea rows={3} className={inputCls} value={a.prevu} placeholder="Ex. « Le module Réserves sert à consigner les réserves jusqu’à leur levée. »" onChange={(e) => up({ prevu: e.target.value })} /></Field>
+              <Field required show={tried} error={textFormatError(a.observe)} label="Usage observé" hint="Ce que les utilisateurs font réellement, décrit comme vous l’avez constaté."><textarea rows={3} className={inputCls} value={a.observe} placeholder="Ex. « Des conducteurs suivent les livraisons dans le champ commentaire. »" onChange={(e) => up({ observe: e.target.value })} /></Field>
             </>
           )}
           {a.kind === "detournement" && (
@@ -303,7 +315,7 @@ function Describe({ a, up, tried, locked }: { a: Analysis; up: Up; tried: boolea
             const miss = f.fields.filter((x) => !(a.fiches[ficheKey(f.id, x.key)] ?? "").trim()).length;
             return (
               <details key={f.id} open className="rounded-2xl border border-border p-4">
-                <summary className="flex cursor-pointer flex-wrap items-center gap-2 font-bold">{f.title}{miss ? <Pill tone="accent">! {miss} champ{miss > 1 ? "s" : ""} vide{miss > 1 ? "s" : ""}</Pill> : <Pill tone="soft">✓ Complète</Pill>}</summary>
+                <summary className="flex cursor-pointer flex-wrap items-center gap-2 font-bold">{f.title}{miss ? <Pill tone="accent">{miss} champ{miss > 1 ? "s" : ""} vide{miss > 1 ? "s" : ""}</Pill> : <Pill tone="soft">✓ Complète</Pill>}</summary>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {f.fields.map((x) => (
                     <Field key={x.key} label={x.label}>
@@ -316,11 +328,11 @@ function Describe({ a, up, tried, locked }: { a: Analysis; up: Up; tried: boolea
           })}
         </Card>
         <Card className="space-y-5">
-          <div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl text-primary">Votre position de départ</h3><Pill tone="accent">Obligatoire</Pill><Pill><Lock className="mr-1 h-3 w-3" /> Masquée jusqu’à la synthèse</Pill></div>
+          <div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl text-primary">Votre position de départ<Required kind="choice" /></h3><Pill><Lock className="mr-1 h-3 w-3" /> Masquée jusqu’à la synthèse</Pill></div>
           <p className="text-sm text-muted-foreground">Votre réaction spontanée, avant toute analyse. Elle n’est jamais transmise à l’IA : elle sert seulement à mesurer, à la fin, si votre réflexion a évolué. « Je ne sais pas encore » est une réponse valide.</p>
           {locked ? <p className="rounded-2xl bg-primary px-5 py-4 font-bold tracking-widest text-highlight">MASQUÉE · position et justification enregistrées</p> : (
             <>
-              <div className="flex flex-wrap gap-2">{[...K.options, NSP].map((o) => <Chip key={o} on={a.position === o} onClick={() => up({ position: o })} dashed={o === NSP}>{o}</Chip>)}</div>
+              <div role="group" aria-label="Votre position de départ" aria-required="true" aria-invalid={(tried && !a.position) || undefined} className={cn("flex flex-wrap gap-2", tried && !a.position && choiceInvalidCls)}>{[...K.options, NSP].map((o) => <Chip key={o} on={a.position === o} onClick={() => up({ position: o })} dashed={o === NSP}>{o}</Chip>)}</div>
               <Field label="Justification de cette position" hint="Une ou deux phrases suffisent. Ex. « Signal trop faible, aucun impact client démontré. »"><textarea rows={2} className={inputCls} value={a.positionWhy} onChange={(e) => up({ positionWhy: e.target.value })} /></Field>
             </>
           )}
@@ -724,8 +736,8 @@ function Decide({ a, up, trendLabel, tried, pm }: { a: Analysis; up: Up; trendLa
       </div>
 
       <Card className="space-y-5">
-        <h3 className="text-2xl text-primary">Votre décision</h3>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1"><h3 className="text-2xl text-primary">Votre décision<Required kind="choice" /></h3><RequiredLegend /></div>
+        <div role="group" aria-label="Votre décision" aria-required="true" aria-invalid={(tried && !a.decision) || undefined} className={cn("grid gap-3 md:grid-cols-2", tried && !a.decision && choiceInvalidCls)}>
           {K.decisions.map((d) => (
             <button key={d} type="button" aria-pressed={a.decision === d} onClick={() => up({ decision: d })}
               className={cn("rounded-2xl border-2 p-4 text-left", a.decision === d ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-input")}>
@@ -737,7 +749,7 @@ function Decide({ a, up, trendLabel, tried, pm }: { a: Analysis; up: Up; trendLa
             </button>
           ))}
         </div>
-        <Field label={`Pourquoi ce choix ?${a.decision && trendLabel && a.decision !== trendLabel ? " · obligatoire" : " · facultatif"}`} hint="Ce qui a fait pencher la balance, en une ou deux phrases. Si vous vous écartez de l’IA, dites ce qu’elle n’a pas pris en compte. Ce texte apparaît tel quel dans la synthèse.">
+        <Field required={!!(a.decision && trendLabel && a.decision !== trendLabel)} show={tried} error={textFormatError(a.decisionWhy)} label={`Pourquoi ce choix ?${a.decision && trendLabel && a.decision !== trendLabel ? "" : " · facultatif"}`} hint="Ce qui a fait pencher la balance, en une ou deux phrases. Si vous vous écartez de l’IA, dites ce qu’elle n’a pas pris en compte. Ce texte apparaît tel quel dans la synthèse.">
           <textarea rows={3} className={inputCls} value={a.decisionWhy} onChange={(e) => up({ decisionWhy: e.target.value })} />
         </Field>
         <Field label="Objection déterminante · facultatif" hint="L’objection qui a fait évoluer ou conforté votre décision, s’il y en a une.">
@@ -747,13 +759,13 @@ function Decide({ a, up, trendLabel, tried, pm }: { a: Analysis; up: Up; trendLa
           </select>
         </Field>
         <div className="space-y-3">
-          <p className="font-bold">{a.decision && K.options[0] === a.decision ? "Surveillance" : "Suivi"} : quand y revenir ? · obligatoire</p>
+          <p className="font-bold">{a.decision && K.options[0] === a.decision ? "Surveillance" : "Suivi"} : quand y revenir ?<Required /></p>
           <p className="text-sm text-muted-foreground">Une date de revue ou un signal déclencheur, et une idée de mesure. Un signal déclencheur est un événement concret qui rouvre la question ; la mesure, un indicateur simple que vous pouvez suivre.</p>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Date de revue"><input type="date" className={inputCls} value={a.reviewDate} onChange={(e) => up({ reviewDate: e.target.value })} /></Field>
-            <Field label="ou signal déclencheur"><input className={inputCls} value={a.trigger} placeholder="Ex. annonce publique du concurrent" onChange={(e) => up({ trigger: e.target.value })} /></Field>
+            <Field required noMark show={tried} empty={!a.reviewDate && !a.trigger.trim()} label="Date de revue"><input type="date" className={inputCls} value={a.reviewDate} onChange={(e) => up({ reviewDate: e.target.value })} /></Field>
+            <Field required noMark show={tried} empty={!a.reviewDate && !a.trigger.trim()} error={textFormatError(a.trigger)} label="ou signal déclencheur"><input className={inputCls} value={a.trigger} placeholder="Ex. annonce publique du concurrent" onChange={(e) => up({ trigger: e.target.value })} /></Field>
           </div>
-          <Field label="Idée de mesure"><input className={inputCls} value={a.measure} placeholder="Ex. demandes clients liées au sujet par mois" onChange={(e) => up({ measure: e.target.value })} /></Field>
+          <Field required show={tried} error={textFormatError(a.measure)} label="Idée de mesure"><input className={inputCls} value={a.measure} placeholder="Ex. demandes clients liées au sujet par mois" onChange={(e) => up({ measure: e.target.value })} /></Field>
         </div>
       </Card>
 
