@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, X } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { AlertCircle, Plus, X } from "lucide-react";
+import { cloneElement, isValidElement, useId, useState, type ButtonHTMLAttributes, type FocusEvent, type ChangeEvent, type ReactElement, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { setUserName, useUserName } from "@/lib/store";
 
 export function Logo() {
@@ -56,7 +57,7 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" 
 export function Btn({ variant = "primary", className, ...p }: BtnProps) {
   const v = {
     primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-    accent: "bg-accent text-accent-foreground hover:bg-accent-strong",
+    accent: "bg-accent text-accent-foreground hover:bg-accent-strong disabled:bg-accent/45 disabled:text-accent-foreground aria-disabled:cursor-not-allowed aria-disabled:bg-accent/45 aria-disabled:hover:bg-accent/45",
     outline: "border-2 border-border bg-card text-foreground hover:border-input",
     ghost: "text-accent hover:bg-secondary",
     danger: "text-destructive hover:bg-secondary",
@@ -65,7 +66,7 @@ export function Btn({ variant = "primary", className, ...p }: BtnProps) {
     <button
       type="button"
       {...p}
-      className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50", v, className)}
+      className={cn("inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-bold transition-colors disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none", variant === "accent" && "disabled:bg-accent/45 disabled:text-accent-foreground", v, className)}
     />
   );
 }
@@ -86,23 +87,98 @@ export function Chip({ on, onClick, children, dashed }: { on: boolean; onClick: 
   );
 }
 
-export function Required() {
-  return <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 align-middle font-sans text-[11px] font-bold text-secondary-foreground">Obligatoire</span>;
+const REQUIRED_TIP = {
+  text: "Champ obligatoire : saisissez du contenu rédigé, avec des mots (pas uniquement des chiffres), pour pouvoir continuer.",
+  choice: "Choix obligatoire : sélectionnez une option pour pouvoir continuer.",
+};
+
+/**
+ * Astérisque rouge des champs obligatoires. Au survol, au focus clavier ou au toucher,
+ * une infobulle précise ce qui est attendu ; « obligatoire » reste lu par les lecteurs d’écran.
+ */
+export function Required({ onDark, kind = "text" }: { onDark?: boolean | undefined; kind?: "text" | "choice" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            aria-label={REQUIRED_TIP[kind]}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
+            className={cn("ml-1 cursor-help rounded-sm px-0.5 font-sans font-bold", onDark ? "text-highlight" : "text-destructive")}
+          >
+            *
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" collisionPadding={12} className={cn("max-w-64 rounded-xl px-3 py-2 text-sm font-normal leading-snug shadow-soft", onDark && "border border-border bg-card text-foreground")}>
+          {REQUIRED_TIP[kind]}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+export function RequiredLegend({ onDark }: { onDark?: boolean | undefined }) {
+  return <p className={cn("text-xs", onDark ? "text-primary-foreground/70" : "text-muted-foreground")}><span aria-hidden="true" className={cn("font-bold", onDark ? "text-highlight" : "text-destructive")}>*</span> Champ obligatoire</p>;
 }
 
 export const inputCls =
   "w-full rounded-2xl border-2 border-border bg-card px-4 py-3 text-base placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none";
 
-export function Field({ label, hint, required, group, children }: { label: string; hint?: string; required?: boolean; group?: boolean; children: ReactNode }) {
+/** Contour rouge d’un champ en erreur (vide ou mal formé). */
+export const invalidCls = "cf-invalid border-destructive focus:border-destructive ring-4 ring-destructive/15";
+/** Contour rouge d’un groupe de choix obligatoire resté sans réponse. */
+export const choiceInvalidCls = "cf-invalid rounded-[1.75rem] outline-2 outline-offset-4 outline-destructive";
+
+export function FieldError({ id, children, onDark }: { id?: string; children: ReactNode; onDark?: boolean | undefined }) {
+  return (
+    <span id={id} role="alert" className={cn("cf-error-msg flex items-start gap-1.5 text-sm font-bold", onDark ? "text-highlight" : "text-destructive")}>
+      <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{children}</span>
+    </span>
+  );
+}
+
+type ControlProps = { value?: unknown; className?: string; onBlur?: (e: FocusEvent) => void; onChange?: (e: ChangeEvent) => void };
+
+/**
+ * Champ de formulaire. Pour un champ `required` :
+ * - vide → contour rouge seulement quand l’utilisateur tente de passer à la suite (`show`) ;
+ * - mal formé (`error`) → contour rouge + message sous le champ, dès que l’utilisateur quitte le champ.
+ * Le contour disparaît dès que la saisie redevient valide.
+ */
+export function Field({ label, hint, required, group, children, error, empty, show, onDark, noMark }: {
+  label: string; hint?: string; required?: boolean; group?: boolean; children: ReactNode;
+  error?: string | null; empty?: boolean; show?: boolean; onDark?: boolean;
+  /** Ne pas répéter l’astérisque quand l’obligation porte sur le groupe (« l’un ou l’autre »). */
+  noMark?: boolean;
+}) {
   const Tag = group ? "div" : "label";
+  const errId = useId();
+  const [touched, setTouched] = useState(false);
+  const child = isValidElement(children) ? (children as ReactElement<ControlProps>) : null;
+  const isEmpty = empty ?? String(child?.props.value ?? "").trim() === "";
+  const showFormat = !!error && (show || touched);
+  const invalid = !!required && ((isEmpty && show) || showFormat);
+  const control = child && !group
+    ? cloneElement(child, {
+        "aria-invalid": invalid || undefined,
+        "aria-required": required || undefined,
+        "aria-describedby": showFormat ? errId : undefined,
+        className: cn(child.props.className, invalid && invalidCls),
+        onBlur: (e: FocusEvent) => { setTouched(true); child.props.onBlur?.(e); },
+      } as Partial<ControlProps>)
+    : children;
   return (
     <Tag className="block space-y-2" {...(group ? { role: "group", "aria-label": label } : {})}>
       <span className="block font-bold">
         {label}
-        {required && <Required />}
+        {required && !noMark && <Required onDark={onDark} />}
       </span>
-      {hint && <span className="block text-sm text-muted-foreground">{hint}</span>}
-      {children}
+      {hint && <span className={cn("block text-sm", onDark ? "text-primary-foreground/70" : "text-muted-foreground")}>{hint}</span>}
+      {control}
+      {showFormat && <FieldError id={errId} onDark={onDark}>{error}</FieldError>}
     </Tag>
   );
 }

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { mockAI } from "./ai.mock";
 
 // La position de départ n'est jamais transmise à l'IA.
 const Input = z.object({
@@ -21,6 +22,11 @@ const Input = z.object({
 export const runAI = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
+    // IA simulée pour les correctifs visuels : local uniquement (AI_MOCK=1), jamais en production.
+    if (process.env["AI_MOCK"] === "1" && process.env["NODE_ENV"] !== "production") {
+      await new Promise((r) => setTimeout(r, 600));
+      return { result: JSON.stringify(mockAI(data)), error: "" };
+    }
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) return { result: "", error: "Clé IA absente." };
     const conc = data.kind === "concurrent";

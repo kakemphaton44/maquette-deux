@@ -116,10 +116,26 @@ export const KIND: Record<Kind, { code: string; name: string; intro: string; opt
   },
 };
 
+/* Format des champs obligatoires : vide = « à remplir » (contour seul) ; mal formé = message sous le champ. */
+/** Champ texte libre : il doit contenir au moins une lettre, pas uniquement des chiffres ou de la ponctuation. */
+export function textFormatError(v: string): string | null {
+  const t = v.trim();
+  if (!t || /\p{L}/u.test(t)) return null;
+  return /\d/.test(t) ? "Format incorrect : saisissez du texte, pas uniquement des chiffres." : "Format incorrect : saisissez du texte, avec des mots.";
+}
+/** Nom ou initiales : lettres, espaces, tirets, apostrophes et points seulement. */
+export function nameFormatError(v: string): string | null {
+  const t = v.trim();
+  if (!t) return null;
+  if (/\d/.test(t)) return "Format incorrect : un nom ne contient pas de chiffres.";
+  if (!/^[\p{L}][\p{L}\s.'’-]*$/u.test(t)) return "Format incorrect : utilisez seulement des lettres, espaces, tirets ou points.";
+  return null;
+}
+
 /** Un nom et un type de situation se choisissent ensemble, avant de lancer l’analyse. */
 export function launchMissing(name: string, kind: Kind | null): ("nom" | "situation")[] {
   const missing: ("nom" | "situation")[] = [];
-  if (!name.trim()) missing.push("nom");
+  if (!name.trim() || nameFormatError(name)) missing.push("nom");
   if (!kind) missing.push("situation");
   return missing;
 }
@@ -211,9 +227,12 @@ export function describeErrors(a: Analysis): string[] {
   const e: string[] = [];
   if (a.kind === "concurrent") {
     if (!a.signal.trim()) e.push("Décrivez le signal concurrent en une phrase au moins.");
+    else if (textFormatError(a.signal)) e.push("Signal concurrent : saisissez du texte, pas uniquement des chiffres.");
   } else {
     if (!a.prevu.trim()) e.push("Décrivez l’usage prévu.");
+    else if (textFormatError(a.prevu)) e.push("Usage prévu : saisissez du texte, pas uniquement des chiffres.");
     if (!a.observe.trim()) e.push("Décrivez l’usage observé.");
+    else if (textFormatError(a.observe)) e.push("Usage observé : saisissez du texte, pas uniquement des chiffres.");
   }
   if (!a.position) e.push("Choisissez votre position de départ.");
   return e;
@@ -294,8 +313,11 @@ export function decideErrors(a: Analysis, aiTrend: string | null): string[] {
   const e: string[] = [];
   if (!a.decision) e.push("Choisissez une décision.");
   if (a.decision && aiTrend && a.decision !== aiTrend && !a.decisionWhy.trim()) e.push("Votre décision diffère de la tendance proposée par l’IA : expliquez ce qui motive l’écart.");
+  else if (textFormatError(a.decisionWhy)) e.push("Pourquoi ce choix : saisissez du texte, pas uniquement des chiffres.");
   if (!a.reviewDate && !a.trigger.trim()) e.push("Indiquez une date de revue ou un signal déclencheur.");
+  else if (textFormatError(a.trigger)) e.push("Signal déclencheur : décrivez un événement, pas uniquement des chiffres.");
   if (!a.measure.trim()) e.push("Indiquez une idée de mesure.");
+  else if (textFormatError(a.measure)) e.push("Idée de mesure : décrivez l’indicateur, pas uniquement un chiffre.");
   return e;
 }
 export function closeErrors(a: Analysis): string[] {
