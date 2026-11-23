@@ -1,5 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Copy, RotateCcw } from "lucide-react";
+import { ChevronDown, Copy, ExternalLink, RotateCcw, UploadCloud } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { saveToNotion } from "@/lib/notion.functions";
 import type { ReactNode } from "react";
 import { Btn, Pill } from "@/components/cf/ui";
 import {
@@ -7,7 +10,7 @@ import {
   duplicateAnalysis, ficheKey, filled, outcome, reopenAnalysis, scaleMax, solidity, status, trend,
   type Analysis, type ReadStatus,
 } from "@/lib/analyses";
-import { getAnalysis, saveAnalysis } from "@/lib/store";
+import { getAnalysis, saveAnalysis, useUserName } from "@/lib/store";
 
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "—");
 const READ_TONE: Record<ReadStatus, "primary" | "accent" | "muted"> = { sait: "primary", suppose: "accent", ignore: "muted" };
@@ -31,8 +34,21 @@ export function AnalysisActions({ a }: { a: Analysis }) {
     saveAnalysis(reopenAnalysis(getAnalysis(a.id) ?? a, new Date()));
     navigate({ to: "/analyse/$id", params: { id: a.id } });
   };
+  const push = useServerFn(saveToNotion);
+  const pm = useUserName();
+  const [sync, setSync] = useState<{ busy?: boolean; url?: string; error?: string }>({});
+  const toNotion = async () => {
+    setSync({ busy: true });
+    try {
+      const r = await push({ data: { analysis: (getAnalysis(a.id) ?? a) as unknown as { id: string }, pm } });
+      setSync(r.error ? { error: r.error } : { url: r.url });
+    } catch { setSync({ error: "Notion n’a pas répondu." }); }
+  };
   return (
     <>
+      <Btn variant="outline" onClick={toNotion} disabled={sync.busy}><UploadCloud className="h-4 w-4" /> {sync.busy ? "Enregistrement…" : sync.url ? "Mettre à jour dans Notion" : "Enregistrer dans Notion"}</Btn>
+      {sync.url && <a href={sync.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-bold text-accent">Enregistrée · ouvrir dans Notion <ExternalLink className="h-3.5 w-3.5" /></a>}
+      {sync.error && <p role="alert" className="w-full text-sm font-bold text-destructive">{sync.error}</p>}
       <Btn variant="outline" onClick={duplicate} title="Nouvelle analyse avec la même description et les mêmes fiches de contexte"><Copy className="h-4 w-4" /> Dupliquer</Btn>
       {closed && <Btn variant="outline" onClick={reopen}><RotateCcw className="h-4 w-4" /> {s === "evaluee" ? "Rouvrir pour modifier" : "Reprendre"}</Btn>}
     </>
@@ -41,17 +57,19 @@ export function AnalysisActions({ a }: { a: Analysis }) {
 
 function Section({ n, title, sub, children, open }: { n: number; title: string; sub?: string; children: ReactNode; open?: boolean }) {
   return (
-    <details open={open} className="group rounded-3xl border border-border bg-card">
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-5 [&::-webkit-details-marker]:hidden">
+    <details open={open} className="group rounded-2xl border border-border bg-card">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 md:px-5 [&::-webkit-details-marker]:hidden">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs text-highlight">{n}</span>
-        <span className="min-w-0 flex-1"><span className="block font-bold">{title}</span>{sub && <span className="block text-xs text-muted-foreground">{sub}</span>}</span>
+        <span className="min-w-0 flex-1"><span className="block font-display text-xl leading-tight text-primary">{title}</span>{sub && <span className="block text-sm text-muted-foreground">{sub}</span>}</span>
         <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
-      <div className="space-y-4 border-t border-border p-5 text-sm">{children}</div>
+      <div className="space-y-5 border-t border-border px-4 py-4 text-sm md:px-5">{children}</div>
     </details>
   );
 }
 
+/** Titre d'un bloc dans une étape : plus marqué qu'une étiquette de champ. */
+const H = ({ children }: { children: ReactNode }) => <h4 className="mb-2 border-l-2 border-accent pl-2 font-sans text-sm font-bold text-primary">{children}</h4>;
 const Label = ({ children }: { children: ReactNode }) => <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{children}</p>;
 const Empty = () => <p className="text-muted-foreground">Non renseigné.</p>;
 
@@ -80,11 +98,11 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
           <KV k="Position de départ" v={a.position && <strong>{a.position}</strong>} />
           <KV k="Pourquoi cette position" v={a.positionWhy} />
         </div>
-        {filled(a.risks).length > 0 && <div><Label>Risques déjà identifiés</Label><ul className="mt-1 list-disc pl-5">{filled(a.risks).map((r) => <li key={r}>{r}</li>)}</ul></div>}
+        {filled(a.risks).length > 0 && <div><H>Risques déjà identifiés</H><ul className="list-disc pl-5">{filled(a.risks).map((r) => <li key={r}>{r}</li>)}</ul></div>}
         {FICHES[a.kind].map((f) => (
           <div key={f.id}>
-            <Label>{f.title}</Label>
-            <dl className="mt-1 grid gap-x-6 gap-y-2 md:grid-cols-2">
+            <H>{f.title}</H>
+            <dl className="grid gap-x-6 gap-y-2 md:grid-cols-2">
               {f.fields.map((x) => <div key={x.key} className="min-w-0"><dt className="text-muted-foreground">{x.label}</dt><dd className="break-words">{(a.fiches[ficheKey(f.id, x.key)] ?? "").trim() || "—"}</dd></div>)}
             </dl>
           </div>
@@ -92,12 +110,12 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
       </Section>
 
       <Section n={2} title={STEPS[1].label} sub={`${a.questions.length} question${a.questions.length > 1 ? "s" : ""} · ${a.reading.length} élément${a.reading.length > 1 ? "s" : ""} de lecture`}>
-        {a.summary && <div><Label>Synthèse de l’IA</Label><p className="mt-1">{a.summary}</p></div>}
+        {a.summary && <div><H>Synthèse de l’IA</H><p>{a.summary}</p></div>}
         <div>
-          <Label>Questions de l’IA et vos réponses</Label>
+          <H>Questions de l’IA et vos réponses</H>
           {a.questions.length ? (
-            <ol className="mt-2 space-y-3">{a.questions.map((q, i) => (
-              <li key={q.id} className="rounded-2xl bg-muted p-3">
+            <ol className="grid gap-2 md:grid-cols-2">{a.questions.map((q, i) => (
+              <li key={q.id} className="rounded-xl bg-muted px-3 py-2.5">
                 <p className="font-bold">{i + 1}. {q.text}</p>
                 {q.why && <p className="text-xs text-muted-foreground">Pour {q.why}</p>}
                 <p className="mt-1">{q.skipped ? <em className="text-muted-foreground">Question passée</em> : q.answer.trim() || <em className="text-muted-foreground">Sans réponse</em>}</p>
@@ -106,22 +124,30 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
           ) : <Empty />}
         </div>
         <div>
-          <Label>On sait · on suppose · on ignore</Label>
+          <H>On sait · on suppose · on ignore</H>
           {a.reading.length ? (
-            <ul className="mt-2 space-y-2">{a.reading.map((r) => (
-              <li key={r.id} className="rounded-2xl border border-border p-3">
-                <div className="flex flex-wrap items-center gap-2"><Pill tone={READ_TONE[r.status]}>{READ_LABEL[r.status]}</Pill>{r.label && <span className="font-bold">{r.label}</span>}{r.orig && <Pill tone="accent">Corrigé par vous</Pill>}</div>
-                <p className="mt-1">{r.text}</p>
-                {r.source && <p className="text-xs text-muted-foreground">Source : {r.source}{r.quote ? ` · « ${r.quote} »` : ""}</p>}
-                {r.orig && <p className="mt-1 text-xs text-muted-foreground">Proposition initiale de l’IA ({READ_LABEL[r.orig.status]}) : {r.orig.text}</p>}
-              </li>
-            ))}</ul>
+            <div className="grid gap-3 md:grid-cols-3">{(["sait", "suppose", "ignore"] as const).map((st) => {
+              const items = a.reading.filter((r) => r.status === st);
+              return (
+                <div key={st} className="min-w-0 rounded-xl bg-muted p-2.5">
+                  <p className="mb-2 flex items-center justify-between"><Pill tone={READ_TONE[st]}>{READ_LABEL[st]}</Pill><span className="font-mono text-xs text-muted-foreground">{items.length}</span></p>
+                  {items.length ? <ul className="space-y-2">{items.map((r) => (
+                    <li key={r.id} className="rounded-lg bg-card px-3 py-2">
+                      {(r.label || r.orig) && <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold">{r.label}{r.orig && <span className="rounded-full bg-secondary px-2 py-0.5 text-secondary-foreground">Corrigé</span>}</p>}
+                      <p>{r.text}</p>
+                      {r.source && <p className="text-xs text-muted-foreground">{r.source}{r.quote ? ` · « ${r.quote} »` : ""}</p>}
+                      {r.orig && <p className="mt-1 text-xs text-muted-foreground">IA au départ ({READ_LABEL[r.orig.status]}) : {r.orig.text}</p>}
+                    </li>
+                  ))}</ul> : <p className="text-xs text-muted-foreground">Rien.</p>}
+                </div>
+              );
+            })}</div>
           ) : <Empty />}
         </div>
         {a.scenarios.length > 0 && (
-          <div><Label>Scénarios de riposte</Label>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">{a.scenarios.map((s) => (
-              <div key={s.name} className="rounded-2xl bg-muted p-3">
+          <div><H>Scénarios de riposte</H>
+            <div className="grid gap-2 md:grid-cols-3">{a.scenarios.map((s) => (
+              <div key={s.name} className="rounded-xl bg-muted px-3 py-2.5">
                 <p className="text-xs font-bold uppercase tracking-wider text-accent">{s.name} · {s.proof}</p>
                 <p className="font-bold">{s.title}</p><p>{s.desc}</p>
                 {s.gains.length > 0 && <p className="mt-1 text-xs">Gains : {s.gains.join(", ")}</p>}
@@ -132,14 +158,14 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
           </div>
         )}
         {a.manques.length > 0 && (
-          <div><Label>Ce que l’usage révèle comme manque</Label>
-            <ul className="mt-2 space-y-2">{a.manques.map((m) => (
-              <li key={m.id} className="rounded-2xl bg-muted p-3"><p className="font-bold">{m.title} {a.manqueId === m.id && <Pill tone="primary">Retenu</Pill>}</p><p className="text-xs text-muted-foreground">{m.proof} · appui : {m.appui}</p></li>
+          <div><H>Ce que l’usage révèle comme manque</H>
+            <ul className="grid gap-2 md:grid-cols-2">{a.manques.map((m) => (
+              <li key={m.id} className="rounded-xl bg-muted px-3 py-2.5"><p className="font-bold">{m.title} {a.manqueId === m.id && <Pill tone="primary">Retenu</Pill>}</p><p className="text-xs text-muted-foreground">{m.proof} · appui : {m.appui}</p></li>
             ))}</ul>
           </div>
         )}
         {a.po && (
-          <div><Label>Problème ou opportunité · {a.po.label}</Label>
+          <div><H>Problème ou opportunité · {a.po.label}</H>
             <div className="mt-1 grid gap-3 md:grid-cols-2">
               <div><p className="font-bold">Pour</p><ul className="list-disc pl-5">{a.po.pro.map((x) => <li key={x}>{x}</li>)}</ul></div>
               <div><p className="font-bold">Contre</p><ul className="list-disc pl-5">{a.po.con.map((x) => <li key={x}>{x}</li>)}</ul></div>
@@ -150,8 +176,8 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
 
       <Section n={3} title={STEPS[2].label} sub={`Tendance : ${t?.label ?? "—"} · confiance ${t ? CONF[t.conf] : "—"}`}>
         {a.criteria.length ? (
-          <ul className="space-y-2">{a.criteria.map((c) => (
-            <li key={c.id} className="rounded-2xl border border-border p-3">
+          <ul className="grid gap-2 md:grid-cols-2">{a.criteria.map((c) => (
+            <li key={c.id} className="rounded-xl border border-border px-3 py-2.5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-bold">{c.name}</span>
                 <span className="font-mono">{c.value}/{max}{c.value !== c.ai && <span className="text-muted-foreground"> · IA : {c.ai}/{max}</span>}</span>
@@ -164,7 +190,7 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
         {a.kind === "detournement" && <p>Risque bloquant : <strong>{a.blocking ? "Oui" : "Non"}</strong></p>}
         {a.aiTrendInitial && a.aiTrendInitial !== t?.label && <p>Proposition initiale de l’IA : <strong>{a.aiTrendInitial}</strong> ; tendance après vos ajustements : <strong>{t?.label}</strong>.</p>}
         {a.corrections.length > 0 && (
-          <div><Label>Journal des corrections</Label>
+          <div><H>Journal des corrections</H>
             <ul className="mt-1 space-y-1">{a.corrections.map((c, i) => <li key={i}>{fmt(c.at)} · <strong>{c.name}</strong> : {c.from} → {c.to} (IA : {c.ai}) · {MOTIF_LABEL[c.motif]}{c.note ? ` — ${c.note}` : ""}</li>)}</ul>
           </div>
         )}
@@ -176,9 +202,9 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
           if (!os.length) return null;
           return (
             <div key={opt}>
-              <p className="flex flex-wrap items-center gap-2"><span className="font-display text-xl text-primary">{opt}</span><Pill tone="muted">Solidité : {solidity(a, opt)}</Pill></p>
-              <ul className="mt-2 space-y-2">{os.map((o) => (
-                <li key={o.id} className={`rounded-2xl border p-3 ${key === o.id ? "border-2 border-primary" : "border-border"}`}>
+              <p className="flex flex-wrap items-center gap-2"><span className="font-bold text-primary">Option · {opt}</span><Pill tone="muted">Solidité : {solidity(a, opt)}</Pill></p>
+              <ul className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{os.map((o) => (
+                <li key={o.id} className={`min-w-0 rounded-xl border px-3 py-2.5 ${key === o.id ? "border-2 border-primary" : "border-border"}`}>
                   <div className="flex flex-wrap items-center gap-2"><span className="font-bold">{o.role}</span><Pill tone={o.support === "etayee" ? "primary" : o.support === "reformulee" ? "accent" : "muted"}>{SUPPORT_LABEL[o.support]}</Pill>{key === o.id && <Pill tone="primary">Objection déterminante</Pill>}</div>
                   <p className="mt-1">« {o.text} »</p>
                   {o.initial && <p className="text-xs text-muted-foreground">Formulation initiale : {o.initial}</p>}
@@ -206,10 +232,6 @@ export function AnalysisDetail({ a }: { a: Analysis }) {
 
       <Section n={6} title={STEPS[5].label} sub={oc ? `Issue : ${oc.label}` : "Issue non calculée"}>
         {oc ? <div><p className="font-display text-2xl text-primary">{oc.label}</p><ul className="mt-1 list-disc pl-5">{oc.lines.map((l) => <li key={l}>{l}</li>)}</ul></div> : <Empty />}
-        <div className="grid gap-4 md:grid-cols-2">
-          <KV k="Pertinence des objections" v={a.pertinence ? `${a.pertinence}/5` : undefined} />
-          <KV k="Effort raisonnable" v={a.effort ? `${a.effort}/5` : undefined} />
-        </div>
         {a.review && (
           <div className="rounded-2xl bg-muted p-3"><Label>Revue du {fmt(a.review.date)}</Label>
             <p className="mt-1">La décision tient : <strong>{{ oui: "Oui", en_partie: "En partie", non: "Non" }[a.review.holds]}</strong>{a.review.verified ? ` · hypothèses vérifiées : ${a.review.verified === "na" ? "sans objet" : yn(a.review.verified)}` : ""}</p>

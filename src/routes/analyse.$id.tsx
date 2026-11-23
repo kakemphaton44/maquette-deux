@@ -7,8 +7,8 @@ import { Missing } from "@/components/cf/Missing";
 import { AnalysisActions } from "@/components/cf/AnalysisDetail";
 import { runAI } from "@/lib/ai.functions";
 import {
-  CONF, CRITERIA, DECIDE_STEP, EVAL_STEP, FICHES, KIND, MOTIF_LABEL, NSP, READ_LABEL, STATUS, STEPS, SUPPORT_LABEL,
-  closeErrors, decideErrors, describeErrors, evalStats, ficheKey, ficheText, filled, missingContext, outcome, scaleMax, solidity, status, synthesisText, textFormatError, titleOf, trend,
+  CONF, CRITERIA, DECIDE_STEP, TRP, EVAL_STEP, FICHES, KIND, MOTIF_LABEL, NSP, READ_LABEL, STATUS, STEPS, SUPPORT_LABEL,
+  closeErrors, decideErrors, objectionsToEvaluate, retainedOptions, describeErrors, evalStats, ficheKey, ficheText, filled, missingContext, outcome, scaleMax, solidity, status, synthesisText, textFormatError, titleOf, trend,
   type Analysis, type Criterion, type Manque, type Motif, type Objection, type Question, type ReadStatus, type ReadingItem, type Scenario, type Support, type YesNo,
 } from "@/lib/analyses";
 import { getAnalysis, saveAnalysis, useAnalyses, useUserName } from "@/lib/store";
@@ -223,7 +223,7 @@ function Workspace({ a }: { a: Analysis }) {
                     up({ completedAt: new Date().toISOString() }); navigate({ to: "/synthese/$id", params: { id: a.id } });
                   } }
               }
-              note={tried && view === 0 && !a.launched && describeErrors(a).length ? "Complétez les champs marqués * pour lancer l’analyse." : tried && view === 4 && decideErrors(a, t?.label ?? null).length ? "Complétez les champs marqués * pour valider." : tried && view === 5 && closeErrors(a).length ? "Évaluez toutes les objections et répondez aux deux questions pour clore." : view === 1 && !a.questionsDone ? "Répondez ou passez chaque question." : view === 2 && a.staleEnjeu ? "Regénérez l’évaluation pour continuer." : view === 3 && a.staleObjections ? "Regénérez les objections pour continuer." : view === 5 ? "Vous pouvez quitter : l’analyse reste reprenable depuis « Mes analyses »." : ""}
+              note={tried && view === 0 && !a.launched && describeErrors(a).length ? "Complétez les champs marqués * pour lancer l’analyse." : tried && view === 4 && decideErrors(a, t?.label ?? null).length ? "Complétez les champs marqués * pour valider." : tried && view === 5 && closeErrors(a).length ? "Évaluez toutes les objections des options retenues pour clore." : view === 1 && !a.questionsDone ? "Répondez ou passez chaque question." : view === 2 && a.staleEnjeu ? "Regénérez l’évaluation pour continuer." : view === 3 && a.staleObjections ? "Regénérez les objections pour continuer." : view === 5 ? "Vous pouvez quitter : l’analyse reste reprenable depuis « Mes analyses »." : ""}
             />
           )}
         </div>
@@ -800,10 +800,12 @@ function Evaluate({ a, up, tried }: { a: Analysis; up: Up; tried: boolean }) {
   const es = evalStats(a);
   const oc = outcome(a);
   const errs = tried ? closeErrors(a) : [];
-  const useful = a.objections.filter((o) => o.useful === "oui" && o.novel === "oui");
+  const retained = retainedOptions(a);
+  const shownOptions = retained.length ? retained : K.options;
+  const useful = objectionsToEvaluate(a).filter((o) => o.useful === "oui" && o.novel === "oui");
   return (
     <>
-      <Head tag="Étape 6 sur 6" title={<>Évaluation des <em className="text-accent">objections</em></>} lead="Deux questions indépendantes par objection. Chaque réponse est enregistrée automatiquement. L’issue est calculée à partir de vos réponses, une fois toutes les objections évaluées." />
+      <Head tag="Étape 6 sur 6" title={<>Évaluation des <em className="text-accent">objections</em></>} lead="Deux questions indépendantes par objection, sur les options que vous avez retenues. Chaque réponse est enregistrée automatiquement. L’issue est calculée à partir de vos réponses, une fois toutes les objections évaluées." />
       <Card className="space-y-2 bg-muted">
         <p className="text-sm">Rappel · votre position de départ : <strong>{a.position}</strong> · votre décision : <strong>{a.decision}</strong></p>
         {a.positionWhy && <p className="text-sm">Justification : {a.positionWhy}</p>}
@@ -821,21 +823,18 @@ function Evaluate({ a, up, tried }: { a: Analysis; up: Up; tried: boolean }) {
           {useful.length > 0 && <div className="mt-3 text-sm"><p className="font-bold">Ce qui a réellement apporté à la décision</p><ul className="list-disc pl-5">{useful.map((o) => <li key={o.id}>{o.option} · {o.role} — {o.text}</li>)}</ul></div>}
         </div>
       )}
-      {K.options.map((opt, i) => {
+      {retained.length > 0 && retained.length < K.options.length && (
+        <p className="text-sm text-muted-foreground">Seules les options retenues sont à évaluer : {retained.map((o) => (o === a.decision || (a.decision === TRP && o === "Tolérer") ? `${o} (votre décision)` : `${o} (votre position de départ)`)).join(" et ")}. Les objections sur les autres options restent consultables à l’étape « {STEPS[3].label} ».</p>
+      )}
+      {shownOptions.map((opt) => {
         const xs = a.objections.filter((o) => o.option === opt);
         return (
           <Card key={opt} className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-2xl text-primary">Option {i + 1} · {opt}</h3><span className="font-mono text-sm">{xs.filter((o) => o.useful && o.novel).length} / {xs.length}</span></div>
+            <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-2xl text-primary">Option {K.options.indexOf(opt) + 1} · {opt}</h3><span className="font-mono text-sm">{xs.filter((o) => o.useful && o.novel).length} / {xs.length}</span></div>
             {xs.map((o) => <ObjectionCard key={o.id} a={a} o={o} up={up} compact={!!(o.useful && o.novel)} />)}
           </Card>
         );
       })}
-      <Card className="space-y-4">
-        <p className="font-bold">Deux dernières questions</p>
-        <p className="text-sm text-muted-foreground">Elles servent la lecture de l’enjeu et l’effort perçu ; elles n’entrent pas dans le calcul de l’issue.</p>
-        <Scale label="Les objections étaient-elles pertinentes pour votre situation ?" lo="Pas du tout" hi="Tout à fait" value={a.pertinence} onChange={(pertinence) => up({ pertinence })} />
-        <Scale label="L’analyse vous a-t-elle demandé un effort raisonnable ?" lo="Trop d’effort" hi="Très raisonnable" value={a.effort} onChange={(effort) => up({ effort })} />
-      </Card>
       {errs.length > 0 && (
         <Card className="border-2 border-destructive/40">
           <p className="font-bold text-destructive">! Pour clore l’analyse :</p>
@@ -846,15 +845,3 @@ function Evaluate({ a, up, tried }: { a: Analysis; up: Up; tried: boolean }) {
   );
 }
 
-function Scale({ label, lo, hi, value, onChange }: { label: string; lo: string; hi: string; value: number | undefined; onChange: (n: number) => void }) {
-  return (
-    <div role="group" aria-label={label} className="space-y-2">
-      <p className="text-sm font-bold">{label}</p>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{lo}</span>
-        {[1, 2, 3, 4, 5].map((n) => <Chip key={n} on={value === n} onClick={() => onChange(n)}>{n}</Chip>)}
-        <span>{hi}</span>
-      </div>
-    </div>
-  );
-}

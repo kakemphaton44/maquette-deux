@@ -294,9 +294,23 @@ export function solidity(a: Analysis, option: string): Solidity {
 }
 
 export const isEvaluated = (o: Objection) => !!o.useful && !!o.novel;
+
+/** Options retenues pour l'évaluation : celle de la décision et celle de la position de départ (si ce sont des options). */
+export function retainedOptions(a: Analysis): string[] {
+  const opts = KIND[a.kind].options;
+  const asOption = (v?: string) => (v === TRP ? "Tolérer" : v);
+  const r = [asOption(a.decision), asOption(a.position)].filter((v): v is string => !!v && opts.includes(v));
+  return opts.filter((o) => r.includes(o));
+}
+/** Objections à évaluer : celles des options retenues ; toutes si aucune décision ne correspond à une option. */
+export function objectionsToEvaluate(a: Analysis): Objection[] {
+  const r = retainedOptions(a);
+  return r.length ? a.objections.filter((o) => r.includes(o.option)) : a.objections;
+}
 export function evalStats(a: Analysis) {
-  const done = a.objections.filter(isEvaluated).length;
-  return { done, total: a.objections.length, complete: a.objections.length > 0 && done === a.objections.length };
+  const xs = objectionsToEvaluate(a);
+  const done = xs.filter(isEvaluated).length;
+  return { done, total: xs.length, complete: xs.length > 0 && done === xs.length };
 }
 
 export interface Outcome { label: string; success: boolean; useful: number; lines: string[] }
@@ -304,7 +318,7 @@ export interface Outcome { label: string; success: boolean; useful: number; line
 export function outcome(a: Analysis): Outcome | null {
   const es = evalStats(a);
   if (!es.complete || !a.decision) return null;
-  const useful = a.objections.filter((o) => o.useful === "oui" && o.novel === "oui").length;
+  const useful = objectionsToEvaluate(a).filter((o) => o.useful === "oui" && o.novel === "oui").length;
   const none = a.position === NSP, changed = !none && a.decision !== a.position;
   const uL = `${useful} objection${useful > 1 ? "s" : ""} jugée${useful > 1 ? "s" : ""} à la fois utile${useful > 1 ? "s" : ""} pour décider et nouvelle${useful > 1 ? "s" : ""}.`;
   const dL = none ? `Sans position de départ : décision construite pendant l’analyse (${a.decision}).` : changed ? `Décision changée : ${a.position} → ${a.decision}.` : `Décision inchangée : ${a.position}.`;
@@ -330,7 +344,6 @@ export function closeErrors(a: Analysis): string[] {
   const e: string[] = [];
   const s = evalStats(a);
   if (!s.complete) e.push(`${s.total - s.done} objection${s.total - s.done > 1 ? "s" : ""} reste${s.total - s.done > 1 ? "nt" : ""} à évaluer.`);
-  if (!a.pertinence || !a.effort) e.push("Répondez aux deux dernières questions pour clore l’analyse.");
   return e;
 }
 

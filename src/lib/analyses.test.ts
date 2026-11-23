@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, duplicateAnalysis, reopenAnalysis, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, duplicateAnalysis, reopenAnalysis, retainedOptions, evalStats, closeErrors, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -168,5 +168,22 @@ describe("dupliquer et rouvrir", () => {
   it("une analyse en cours n'est pas modifiée", () => {
     const a = base();
     expect(reopenAnalysis(a, new Date())).toBe(a);
+  });
+});
+
+describe("évaluation limitée aux options retenues", () => {
+  const objs = [obj({ option: "Surveiller" }), obj({ option: "Ajuster" }), obj({ option: "Riposter" })];
+  it("décision et position de départ", () => {
+    expect(retainedOptions({ ...base(), position: "Ajuster", decision: "Riposter" })).toEqual(["Ajuster", "Riposter"]);
+    expect(retainedOptions({ ...base(), position: NSP, decision: "Riposter" })).toEqual(["Riposter"]);
+  });
+  it("Tolérer pour l'instant compte comme l'option Tolérer", () => {
+    expect(retainedOptions({ ...newAnalysis("detournement", "d", new Date()), position: NSP, decision: TRP })).toEqual(["Tolérer"]);
+  });
+  it("seules les objections retenues sont à évaluer", () => {
+    const a = { ...base(), position: "Ajuster", decision: "Ajuster", objections: [objs[0]!, { ...objs[1]!, useful: "oui" as const, novel: "oui" as const }, objs[2]!] };
+    expect(evalStats(a)).toEqual({ done: 1, total: 1, complete: true });
+    expect(closeErrors(a)).toEqual([]);
+    expect(outcome(a)!.useful).toBe(1);
   });
 });
