@@ -50,6 +50,8 @@ export interface ProOpp { label: string; pro: string[]; con: string[] }
 
 export interface CorrectionLog { at: string; name: string; from: string; to: string; ai: string; motif: Motif; note?: string | undefined }
 
+export interface Reopening { at: string; was: "evaluee" | "abandonnee"; completedAt?: string | undefined; decision?: string | undefined }
+
 export interface Analysis {
   id: string;
   kind: Kind;
@@ -91,6 +93,10 @@ export interface Analysis {
   abandoned: boolean;
   completedAt?: string | undefined;
   review?: { holds: ReviewHolds; verified?: YesNo | "na" | undefined; note: string; date: string } | undefined;
+  /** Analyse d'origine, quand celle-ci a été dupliquée. */
+  duplicatedFrom?: { id: string; title: string } | undefined;
+  /** Réouvertures après clôture ou abandon : la version close précédente reste tracée. */
+  reopenings?: Reopening[] | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -341,8 +347,8 @@ export const STATUS: Record<Status, { label: string; glyph: string; def: string 
   en_cours: { label: "En cours", glyph: "◐", def: "reprenable à l’étape atteinte." },
   eval_incomplete: { label: "Évaluation incomplète", glyph: "…", def: "objections restant à évaluer ; reprenable." },
   bloquee: { label: "Bloquée", glyph: "‖", def: "une action est requise avant de continuer (regénérer une étape ou relancer l’IA)." },
-  evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultation seule." },
-  abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous ; consultation seule, sans issue." },
+  evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultable en détail, peut être rouverte ou dupliquée." },
+  abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous, sans issue ; peut être reprise ou dupliquée." },
 };
 
 /** Recherche et filtres de l'historique. "tous" laisse le critère ouvert. */
@@ -389,4 +395,21 @@ export function synthesisText(a: Analysis, pm: string): string {
     "",
     "Contre-feu éclaire la décision mais ne décide pas.",
   ].filter((x, i, arr) => x !== "" || arr[i - 1] !== "").join("\n");
+}
+
+/** Copie qui repart du même contexte : description, fiches et risques. La position de départ est à redonner, l'IA repart de zéro. */
+export function duplicateAnalysis(a: Analysis, id: string, now: Date): Analysis {
+  return {
+    ...newAnalysis(a.kind, id, now),
+    title: `${titleOf(a)} (copie)`, signal: a.signal, prevu: a.prevu, observe: a.observe, contexte: a.contexte,
+    fiches: { ...a.fiches }, risks: a.risks.length ? [...a.risks] : [""], duplicatedFrom: { id: a.id, title: titleOf(a) },
+  };
+}
+
+/** Rouvre une analyse évaluée ou abandonnée : elle redevient modifiable à partir de l'évaluation des objections. */
+export function reopenAnalysis(a: Analysis, now: Date): Analysis {
+  const s = status(a);
+  if (s !== "evaluee" && s !== "abandonnee") return a;
+  const log: Reopening = { at: now.toISOString(), was: s, completedAt: a.completedAt, decision: a.decision };
+  return { ...a, completedAt: undefined, abandoned: false, reopenings: [...(a.reopenings ?? []), log] };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, duplicateAnalysis, reopenAnalysis, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -138,5 +138,35 @@ describe("recherche et filtres de l'historique", () => {
   it("tous les mots doivent se trouver", () => {
     expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent beta" }))).toEqual(["1"]);
     expect(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent editeur" }).length).toBe(0);
+  });
+});
+
+describe("dupliquer et rouvrir", () => {
+  const done = (): Analysis => ({ ...base(), signal: "Le concurrent baisse ses prix", position: "Riposter", positionWhy: "p", launched: true, step: 5, decision: "Ajuster", fiches: { "a.b": "x" }, completedAt: "2026-02-01T00:00:00.000Z" });
+  it("la copie reprend le contexte, pas la position ni les résultats", () => {
+    const c = duplicateAnalysis(done(), "y", new Date("2026-03-01"));
+    expect(c.id).toBe("y");
+    expect(c.signal).toBe("Le concurrent baisse ses prix");
+    expect(c.fiches).toEqual({ "a.b": "x" });
+    expect(c.position).toBe("");
+    expect(c.launched).toBe(false);
+    expect(c.decision).toBeUndefined();
+    expect(c.duplicatedFrom).toEqual({ id: "x", title: "Le concurrent baisse ses prix" });
+    expect(status(c)).toBe("en_cours");
+  });
+  it("rouvrir une analyse évaluée la rend modifiable et garde la trace", () => {
+    const r = reopenAnalysis(done(), new Date("2026-03-01"));
+    expect(status(r)).toBe("eval_incomplete");
+    expect(r.decision).toBe("Ajuster");
+    expect(r.reopenings).toEqual([{ at: "2026-03-01T00:00:00.000Z", was: "evaluee", completedAt: "2026-02-01T00:00:00.000Z", decision: "Ajuster" }]);
+  });
+  it("rouvrir une analyse abandonnée", () => {
+    const r = reopenAnalysis({ ...base(), launched: true, step: 2, abandoned: true }, new Date("2026-03-01"));
+    expect(status(r)).toBe("en_cours");
+    expect(r.reopenings![0]!.was).toBe("abandonnee");
+  });
+  it("une analyse en cours n'est pas modifiée", () => {
+    const a = base();
+    expect(reopenAnalysis(a, new Date())).toBe(a);
   });
 });

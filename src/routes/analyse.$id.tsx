@@ -4,6 +4,7 @@ import { Activity, AlertCircle, Check, Repeat, ChevronLeft, ChevronRight, Lock, 
 import { useEffect, useState, type ReactNode } from "react";
 import { AppHeader, Btn, Card, Chip, Field, ListEditor, Pill, Required, RequiredLegend, choiceInvalidCls, inputCls } from "@/components/cf/ui";
 import { Missing } from "@/components/cf/Missing";
+import { AnalysisActions } from "@/components/cf/AnalysisDetail";
 import { runAI } from "@/lib/ai.functions";
 import {
   CONF, CRITERIA, DECIDE_STEP, EVAL_STEP, FICHES, KIND, MOTIF_LABEL, NSP, READ_LABEL, STATUS, STEPS, SUPPORT_LABEL,
@@ -171,7 +172,10 @@ function Workspace({ a }: { a: Analysis }) {
           {readOnly && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted px-5 py-3 text-sm">
               <span><strong>{STATUS[st].glyph} Consultation seule · {STATUS[st].label}</strong> — {STATUS[st].def}</span>
-              {st === "evaluee" && <Link to="/synthese/$id" params={{ id: a.id }} className="font-bold text-accent">Voir la synthèse →</Link>}
+              <span className="flex flex-wrap items-center gap-2">
+                {st === "evaluee" && <Link to="/synthese/$id" params={{ id: a.id }} className="font-bold text-accent">Voir la synthèse →</Link>}
+                <AnalysisActions a={a} />
+              </span>
             </div>
           )}
           {view < a.step && !readOnly && (
