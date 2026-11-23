@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Download, Trash2, Upload } from "lucide-react";
+import { ClipboardCheck, CloudDownload, Download, Eye, Trash2, Upload } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { loadFromNotion } from "@/lib/notion.functions";
 import { useRef, useState } from "react";
 import { AppHeader, Btn, Card, Chip, Field, Pill, Required, RequiredLegend, inputCls } from "@/components/cf/ui";
 import { KIND, NO_FILTER, STATUS, STEPS, filterAnalyses, launchMissing, nameFormatError, newAnalysis, reviewStats, status, titleOf, type Analysis, type AnalysisFilter, type Kind, type Status } from "@/lib/analyses";
-import { deleteAnalysis, exportAll, importAll, saveAnalysis, setUserName, useAnalyses, useUserName } from "@/lib/store";
+import { deleteAnalysis, exportAll, importAll, mergeAnalyses, saveAnalysis, setUserName, useAnalyses, useUserName } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -101,6 +103,7 @@ function Home() {
             <div className="flex shrink-0 flex-wrap gap-2">
               {list && list.length > 0 && <Btn variant="outline" onClick={() => { const url = URL.createObjectURL(new Blob([exportAll()], { type: "application/json" })); const l = document.createElement("a"); l.href = url; l.download = "contre-feu-analyses.json"; l.click(); URL.revokeObjectURL(url); }}><Download className="h-4 w-4" /> Exporter</Btn>}
               <Btn variant="outline" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" /> Importer</Btn>
+              <NotionImport />
               <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={async (e) => { const f2 = e.target.files?.[0]; if (!f2) return; try { importAll(await f2.text()); } catch { window.alert("Ce fichier n’est pas un export Contre-feu."); } e.target.value = ""; }} />
             </div>
           </div>
@@ -164,13 +167,36 @@ function Home() {
   );
 }
 
+const mainAct = "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground no-underline hover:bg-primary/90";
+const secAct = "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-accent px-3.5 py-1.5 text-xs font-bold text-accent no-underline hover:bg-secondary";
+
+function NotionImport() {
+  const pull = useServerFn(loadFromNotion);
+  const [st, setSt] = useState<{ busy?: boolean; msg?: string; error?: boolean }>({});
+  const run = async () => {
+    setSt({ busy: true });
+    try {
+      const r = await pull();
+      if (r.error) return setSt({ msg: r.error, error: true });
+      const { added, updated } = mergeAnalyses(JSON.parse(r.json));
+      setSt({ msg: added || updated ? `${added} ajoutée${added > 1 ? "s" : ""}, ${updated} mise${updated > 1 ? "s" : ""} à jour depuis Notion.` : "Déjà à jour avec Notion." + (r.skipped ? ` ${r.skipped} page${r.skipped > 1 ? "s" : ""} sans données ignorée${r.skipped > 1 ? "s" : ""}.` : "") });
+    } catch { setSt({ msg: "Notion n’a pas répondu.", error: true }); }
+  };
+  return (
+    <>
+      <Btn variant="outline" onClick={run} disabled={st.busy}><CloudDownload className="h-4 w-4" /> {st.busy ? "Lecture de Notion…" : "Importer depuis Notion"}</Btn>
+      {st.msg && <p role={st.error ? "alert" : "status"} className={`w-full text-sm ${st.error ? "font-bold text-destructive" : "text-muted-foreground"}`}>{st.msg}</p>}
+    </>
+  );
+}
+
 function Actions({ a }: { a: Analysis }) {
   const s = status(a);
   const done = s === "evaluee" || s === "abandonnee";
   return (
     <>
-      {s === "evaluee" ? <Link to="/synthese/$id" params={{ id: a.id }} className="font-bold text-accent">Consulter</Link> : <Link to="/analyse/$id" params={{ id: a.id }} className="font-bold text-accent">{done ? "Consulter" : s === "bloquee" ? "Relancer" : "Reprendre"}</Link>}
-      {s === "evaluee" && <Link to="/revue/$id" params={{ id: a.id }} className="font-bold text-accent">{a.review ? "Revoir la revue" : "Faire la revue"}</Link>}
+      {s === "evaluee" ? <Link to="/synthese/$id" params={{ id: a.id }} className={mainAct}><Eye className="h-3.5 w-3.5" /> Consulter</Link> : <Link to="/analyse/$id" params={{ id: a.id }} className={mainAct}>{done ? <Eye className="h-3.5 w-3.5" /> : null}{done ? "Consulter" : s === "bloquee" ? "Relancer" : "Reprendre"}</Link>}
+      {s === "evaluee" && <Link to="/revue/$id" params={{ id: a.id }} className={secAct}><ClipboardCheck className="h-3.5 w-3.5" /> {a.review ? "Revoir la revue" : "Faire la revue"}</Link>}
     </>
   );
 }
@@ -184,7 +210,7 @@ function Row({ a }: { a: Analysis }) {
       <td className="pr-4"><Pill tone={toneOf(s)}>{STATUS[s].glyph} {STATUS[s].label}</Pill></td>
       <td className="pr-4">{fmt(a.createdAt)}</td>
       <td className="pr-4">{fmt(a.updatedAt)}</td>
-      <td className="space-x-3 pr-4"><Actions a={a} /></td>
+      <td className="pr-4"><div className="flex flex-wrap items-center gap-2"><Actions a={a} /></div></td>
       <td><button type="button" aria-label="Supprimer l’analyse" className="rounded-full p-2 text-muted-foreground hover:bg-muted" onClick={() => { if (window.confirm(`Supprimer « ${titleOf(a)} » ?`)) deleteAnalysis(a.id); }}><Trash2 className="h-4 w-4" /></button></td>
     </tr>
   );
@@ -197,9 +223,9 @@ function MobileRow({ a }: { a: Analysis }) {
       <p className="min-w-0 break-words font-bold">{titleOf(a)}</p>
       <p className="mt-1 text-xs text-muted-foreground">{KIND[a.kind].name} · créée le {fmt(a.createdAt)} · modifiée le {fmt(a.updatedAt)}</p>
       <div className="mt-2"><Pill tone={toneOf(s)}>{STATUS[s].glyph} {STATUS[s].label}</Pill></div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <Actions a={a} />
-        <button type="button" className="font-bold text-muted-foreground" onClick={() => { if (window.confirm(`Supprimer « ${titleOf(a)} » ?`)) deleteAnalysis(a.id); }}>Supprimer</button>
+        <button type="button" className="ml-auto text-xs font-bold text-muted-foreground" onClick={() => { if (window.confirm(`Supprimer « ${titleOf(a)} » ?`)) deleteAnalysis(a.id); }}>Supprimer</button>
       </div>
     </div>
   );

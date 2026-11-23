@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Copy, Printer } from "lucide-react";
 import { useState } from "react";
-import { AppHeader, Btn, Card, Pill } from "@/components/cf/ui";
+import { AppHeader, Btn, Card } from "@/components/cf/ui";
+import { AnalysisActions, AnalysisDetail } from "@/components/cf/AnalysisDetail";
 import { Missing } from "@/components/cf/Missing";
 import { CONF, KIND, filled, outcome, synthesisText, titleOf, trend } from "@/lib/analyses";
 import { useAnalyses, useUserName } from "@/lib/store";
@@ -25,6 +26,7 @@ function Synthese() {
   const list = useAnalyses();
   const pm = useUserName();
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<"resume" | "detail">("resume");
   if (!list) return <div className="min-h-screen"><AppHeader /></div>;
   const a = list.find((x) => x.id === id);
   if (!a) return <Missing />;
@@ -39,15 +41,23 @@ function Synthese() {
         <Link to="/" className="no-print text-sm font-bold text-accent no-underline">← Mes analyses</Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-accent">Synthèse de décision · prête à partager · non éditable</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-accent">Synthèse de décision · prête à partager</p>
             <h1 className="mt-2 text-5xl text-primary">{titleOf(a)}</h1>
             <p className="mt-2 text-muted-foreground">{KIND[a.kind].name}{pm ? ` · ${pm}` : ""}{a.completedAt ? ` · ${new Date(a.completedAt).toLocaleDateString("fr-FR")}` : ""}</p>
           </div>
-          <div className="no-print flex gap-2">
+          <div className="no-print flex flex-wrap gap-2">
             <Btn variant="outline" onClick={async () => { await navigator.clipboard.writeText(synthesisText(a, pm)); setCopied(true); setTimeout(() => setCopied(false), 2000); }}><Copy className="h-4 w-4" />{copied ? "Copiée" : "Copier la synthèse"}</Btn>
             <Btn variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" /> Imprimer</Btn>
+            <AnalysisActions a={a} />
           </div>
         </div>
+        <div role="tablist" aria-label="Niveau de détail" className="no-print inline-flex rounded-full bg-muted p-1">
+          {([["resume", "Résumé"], ["detail", "Détail complet"]] as const).map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`rounded-full px-5 py-2 text-sm font-bold ${tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
+          ))}
+        </div>
+        {tab === "detail" ? <AnalysisDetail a={a} /> : <>
         <Card><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Situation</p><p className="mt-1 text-lg">{a.summary || a.signal || a.observe}</p></Card>
         <div className="grid gap-5 md:grid-cols-2">
           <Card><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Position de départ · révélée</p><p className="mt-1 font-display text-3xl text-primary">{a.position}</p>{a.positionWhy && <p className="mt-1 text-sm">{a.positionWhy}</p>}</Card>
@@ -67,14 +77,10 @@ function Synthese() {
           {filled(a.risks).length > 0 && <p>Risques déjà identifiés : {filled(a.risks).join(" ; ")}</p>}
         </Card>
         {oc && <Card><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Issue calculée</p><p className="mt-1 font-display text-3xl text-primary">{oc.label}</p><ul className="mt-1 text-sm">{oc.lines.map((l) => <li key={l}>{l}</li>)}</ul></Card>}
-        <details className="rounded-3xl border border-border bg-card p-6">
-          <summary className="cursor-pointer font-bold">Le raisonnement complet · contexte, arguments de l’IA, objections, évolution</summary>
-          <div className="mt-4 space-y-4 text-sm">
-            <div><p className="font-bold">Lecture de la situation</p><ul className="list-disc pl-5">{a.reading.map((r) => <li key={r.id}>[{r.status}] {r.text}{r.orig ? " (corrigé)" : ""}</li>)}</ul></div>
-            <div><p className="font-bold">Critères</p><ul className="list-disc pl-5">{a.criteria.map((c) => <li key={c.id}>{c.name} : {c.value}{c.motif ? ` (IA : ${c.ai})` : ""}</li>)}</ul></div>
-            <div><p className="font-bold">Objections</p><ul className="list-disc pl-5">{a.objections.map((o) => <li key={o.id}>{o.option} · {o.role} : {o.text} {o.useful === "oui" && o.novel === "oui" && <Pill tone="soft">utile et nouvelle</Pill>}</li>)}</ul></div>
-          </div>
-        </details>
+        <button type="button" onClick={() => { setTab("detail"); window.scrollTo(0, 0); }} className="no-print w-full rounded-3xl border border-dashed border-border p-5 text-left font-bold text-accent hover:bg-muted">
+          Voir le raisonnement complet · questions, lecture, critères, objections et évaluations, étape par étape →
+        </button>
+        </>}
         <p className="text-sm text-muted-foreground">Contre-feu éclaire la décision mais ne décide pas : la recommandation de l’IA et la décision du PM sont présentées séparément et ne se remplacent jamais.</p>
         <Link to="/revue/$id" params={{ id: a.id }} className="no-print inline-flex font-bold text-accent">Faire la revue de décision →</Link>
       </main>

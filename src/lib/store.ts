@@ -56,6 +56,21 @@ export function importAll(json: string) {
   write([...data.filter((a: Analysis) => a && a.id && !ids.has(a.id)), ...read()]);
 }
 
+/** Fusionne des analyses venues d'ailleurs (Notion) : ajoute les nouvelles, remplace celles qui y sont plus récentes. */
+export function mergeAnalyses(incoming: Analysis[]) {
+  let added = 0, updated = 0;
+  const list = [...read()];
+  for (const raw of incoming) {
+    if (!raw || typeof raw.id !== "string") continue;
+    const a = normalize(raw);
+    const i = list.findIndex((x) => x.id === a.id);
+    if (i < 0) { list.unshift(a); added++; }
+    else if ((a.updatedAt ?? "") > (list[i]!.updatedAt ?? "")) { list[i] = a; updated++; }
+  }
+  if (added || updated) write(list);
+  return { added, updated };
+}
+
 const nameListeners = new Set<() => void>();
 export function useUserName() {
   return useSyncExternalStore(

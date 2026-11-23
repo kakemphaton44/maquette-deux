@@ -50,6 +50,8 @@ export interface ProOpp { label: string; pro: string[]; con: string[] }
 
 export interface CorrectionLog { at: string; name: string; from: string; to: string; ai: string; motif: Motif; note?: string | undefined }
 
+export interface Reopening { at: string; was: "evaluee" | "abandonnee"; completedAt?: string | undefined; decision?: string | undefined }
+
 export interface Analysis {
   id: string;
   kind: Kind;
@@ -91,6 +93,10 @@ export interface Analysis {
   abandoned: boolean;
   completedAt?: string | undefined;
   review?: { holds: ReviewHolds; verified?: YesNo | "na" | undefined; note: string; date: string } | undefined;
+  /** Analyse d'origine, quand celle-ci a été dupliquée. */
+  duplicatedFrom?: { id: string; title: string } | undefined;
+  /** Réouvertures après clôture ou abandon : la version close précédente reste tracée. */
+  reopenings?: Reopening[] | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -288,9 +294,23 @@ export function solidity(a: Analysis, option: string): Solidity {
 }
 
 export const isEvaluated = (o: Objection) => !!o.useful && !!o.novel;
+
+/** Options retenues pour l'évaluation : celle de la décision et celle de la position de départ (si ce sont des options). */
+export function retainedOptions(a: Analysis): string[] {
+  const opts = KIND[a.kind].options;
+  const asOption = (v?: string) => (v === TRP ? "Tolérer" : v);
+  const r = [asOption(a.decision), asOption(a.position)].filter((v): v is string => !!v && opts.includes(v));
+  return opts.filter((o) => r.includes(o));
+}
+/** Objections à évaluer : celles des options retenues ; toutes si aucune décision ne correspond à une option. */
+export function objectionsToEvaluate(a: Analysis): Objection[] {
+  const r = retainedOptions(a);
+  return r.length ? a.objections.filter((o) => r.includes(o.option)) : a.objections;
+}
 export function evalStats(a: Analysis) {
-  const done = a.objections.filter(isEvaluated).length;
-  return { done, total: a.objections.length, complete: a.objections.length > 0 && done === a.objections.length };
+  const xs = objectionsToEvaluate(a);
+  const done = xs.filter(isEvaluated).length;
+  return { done, total: xs.length, complete: xs.length > 0 && done === xs.length };
 }
 
 export interface Outcome { label: string; success: boolean; useful: number; lines: string[] }
@@ -298,7 +318,7 @@ export interface Outcome { label: string; success: boolean; useful: number; line
 export function outcome(a: Analysis): Outcome | null {
   const es = evalStats(a);
   if (!es.complete || !a.decision) return null;
-  const useful = a.objections.filter((o) => o.useful === "oui" && o.novel === "oui").length;
+  const useful = objectionsToEvaluate(a).filter((o) => o.useful === "oui" && o.novel === "oui").length;
   const none = a.position === NSP, changed = !none && a.decision !== a.position;
   const uL = `${useful} objection${useful > 1 ? "s" : ""} jugée${useful > 1 ? "s" : ""} à la fois utile${useful > 1 ? "s" : ""} pour décider et nouvelle${useful > 1 ? "s" : ""}.`;
   const dL = none ? `Sans position de départ : décision construite pendant l’analyse (${a.decision}).` : changed ? `Décision changée : ${a.position} → ${a.decision}.` : `Décision inchangée : ${a.position}.`;
@@ -324,7 +344,6 @@ export function closeErrors(a: Analysis): string[] {
   const e: string[] = [];
   const s = evalStats(a);
   if (!s.complete) e.push(`${s.total - s.done} objection${s.total - s.done > 1 ? "s" : ""} reste${s.total - s.done > 1 ? "nt" : ""} à évaluer.`);
-  if (!a.pertinence || !a.effort) e.push("Répondez aux deux dernières questions pour clore l’analyse.");
   return e;
 }
 
@@ -341,8 +360,8 @@ export const STATUS: Record<Status, { label: string; glyph: string; def: string 
   en_cours: { label: "En cours", glyph: "◐", def: "reprenable à l’étape atteinte." },
   eval_incomplete: { label: "Évaluation incomplète", glyph: "…", def: "objections restant à évaluer ; reprenable." },
   bloquee: { label: "Bloquée", glyph: "‖", def: "une action est requise avant de continuer (regénérer une étape ou relancer l’IA)." },
-  evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultation seule." },
-  abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous ; consultation seule, sans issue." },
+  evaluee: { label: "Évaluée", glyph: "✓", def: "toutes les objections évaluées, issue calculée ; consultable en détail, peut être rouverte ou dupliquée." },
+  abandonnee: { label: "Abandonnée", glyph: "—", def: "arrêtée par vous, sans issue ; peut être reprise ou dupliquée." },
 };
 
 /** Recherche et filtres de l'historique. "tous" laisse le critère ouvert. */
@@ -389,4 +408,21 @@ export function synthesisText(a: Analysis, pm: string): string {
     "",
     "Contre-feu éclaire la décision mais ne décide pas.",
   ].filter((x, i, arr) => x !== "" || arr[i - 1] !== "").join("\n");
+}
+
+/** Copie qui repart du même contexte : description, fiches et risques. La position de départ est à redonner, l'IA repart de zéro. */
+export function duplicateAnalysis(a: Analysis, id: string, now: Date): Analysis {
+  return {
+    ...newAnalysis(a.kind, id, now),
+    title: `${titleOf(a)} (copie)`, signal: a.signal, prevu: a.prevu, observe: a.observe, contexte: a.contexte,
+    fiches: { ...a.fiches }, risks: a.risks.length ? [...a.risks] : [""], duplicatedFrom: { id: a.id, title: titleOf(a) },
+  };
+}
+
+/** Rouvre une analyse évaluée ou abandonnée : elle redevient modifiable à partir de l'évaluation des objections. */
+export function reopenAnalysis(a: Analysis, now: Date): Analysis {
+  const s = status(a);
+  if (s !== "evaluee" && s !== "abandonnee") return a;
+  const log: Reopening = { at: now.toISOString(), was: s, completedAt: a.completedAt, decision: a.decision };
+  return { ...a, completedAt: undefined, abandoned: false, reopenings: [...(a.reopenings ?? []), log] };
 }

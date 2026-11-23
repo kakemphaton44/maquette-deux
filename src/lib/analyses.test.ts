@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, type Analysis, type Criterion, type Objection } from "./analyses";
+import { NSP, TRP, PART, newAnalysis, outcome, solidity, trend, decideErrors, status, launchMissing, filterAnalyses, textFormatError, nameFormatError, describeErrors, NO_FILTER, duplicateAnalysis, reopenAnalysis, retainedOptions, evalStats, closeErrors, type Analysis, type Criterion, type Objection } from "./analyses";
 
 const crit = (v: Record<string, number>): Criterion[] => Object.entries(v).map(([id, n]) => ({ id, name: id, ai: n, value: n, why: "" }));
 const obj = (p: Partial<Objection>): Objection => ({ id: Math.random().toString(), option: "Ajuster", role: "r", text: "t", support: "non", premises: [], ...p });
@@ -138,5 +138,52 @@ describe("recherche et filtres de l'historique", () => {
   it("tous les mots doivent se trouver", () => {
     expect(ids(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent beta" }))).toEqual(["1"]);
     expect(filterAnalyses([a1, a2], { ...NO_FILTER, q: "concurrent editeur" }).length).toBe(0);
+  });
+});
+
+describe("dupliquer et rouvrir", () => {
+  const done = (): Analysis => ({ ...base(), signal: "Le concurrent baisse ses prix", position: "Riposter", positionWhy: "p", launched: true, step: 5, decision: "Ajuster", fiches: { "a.b": "x" }, completedAt: "2026-02-01T00:00:00.000Z" });
+  it("la copie reprend le contexte, pas la position ni les résultats", () => {
+    const c = duplicateAnalysis(done(), "y", new Date("2026-03-01"));
+    expect(c.id).toBe("y");
+    expect(c.signal).toBe("Le concurrent baisse ses prix");
+    expect(c.fiches).toEqual({ "a.b": "x" });
+    expect(c.position).toBe("");
+    expect(c.launched).toBe(false);
+    expect(c.decision).toBeUndefined();
+    expect(c.duplicatedFrom).toEqual({ id: "x", title: "Le concurrent baisse ses prix" });
+    expect(status(c)).toBe("en_cours");
+  });
+  it("rouvrir une analyse évaluée la rend modifiable et garde la trace", () => {
+    const r = reopenAnalysis(done(), new Date("2026-03-01"));
+    expect(status(r)).toBe("eval_incomplete");
+    expect(r.decision).toBe("Ajuster");
+    expect(r.reopenings).toEqual([{ at: "2026-03-01T00:00:00.000Z", was: "evaluee", completedAt: "2026-02-01T00:00:00.000Z", decision: "Ajuster" }]);
+  });
+  it("rouvrir une analyse abandonnée", () => {
+    const r = reopenAnalysis({ ...base(), launched: true, step: 2, abandoned: true }, new Date("2026-03-01"));
+    expect(status(r)).toBe("en_cours");
+    expect(r.reopenings![0]!.was).toBe("abandonnee");
+  });
+  it("une analyse en cours n'est pas modifiée", () => {
+    const a = base();
+    expect(reopenAnalysis(a, new Date())).toBe(a);
+  });
+});
+
+describe("évaluation limitée aux options retenues", () => {
+  const objs = [obj({ option: "Surveiller" }), obj({ option: "Ajuster" }), obj({ option: "Riposter" })];
+  it("décision et position de départ", () => {
+    expect(retainedOptions({ ...base(), position: "Ajuster", decision: "Riposter" })).toEqual(["Ajuster", "Riposter"]);
+    expect(retainedOptions({ ...base(), position: NSP, decision: "Riposter" })).toEqual(["Riposter"]);
+  });
+  it("Tolérer pour l'instant compte comme l'option Tolérer", () => {
+    expect(retainedOptions({ ...newAnalysis("detournement", "d", new Date()), position: NSP, decision: TRP })).toEqual(["Tolérer"]);
+  });
+  it("seules les objections retenues sont à évaluer", () => {
+    const a = { ...base(), position: "Ajuster", decision: "Ajuster", objections: [objs[0]!, { ...objs[1]!, useful: "oui" as const, novel: "oui" as const }, objs[2]!] };
+    expect(evalStats(a)).toEqual({ done: 1, total: 1, complete: true });
+    expect(closeErrors(a)).toEqual([]);
+    expect(outcome(a)!.useful).toBe(1);
   });
 });
